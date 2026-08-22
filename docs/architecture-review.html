@@ -1053,14 +1053,22 @@
     </ol>
     <div class="callout c-warn">
       <b>Consequence worth stating plainly.</b> A small free model is meaningfully
-      slower and less reliable at multi-step tool use than a frontier one &mdash;
-      roughly 45&nbsp;s versus 15&nbsp;s per question. That is the cost of the
+      slower and less reliable at multi-step tool use than a frontier one. How much
+      slower is currently an open question: the old figure &mdash; roughly
+      45&nbsp;s versus 15&nbsp;s per question &mdash; was measured against
+      <code>openai/gpt-oss-20b:free</code>, which has since been withdrawn, and the
+      model that replaced it answers a weather question in <b>11.7&nbsp;s</b>. The
+      stale ratio is withdrawn rather than restated. Either way it is the cost of the
       zero-cost constraint, and it is precisely why <b>no safety control depends on
       the model</b>: every guardrail, hazard rating and refusal is deterministic
       code that behaves identically regardless of which model answers. The safety
       argument is written against the weakest model the system supports, because
       that is the one it runs on.
     </div>
+  </section>
+
+  <!-- ================= 4 ================= -->
+  <section id="s4">
     <div class="sec-head"><span class="sec-num">04</span><h2 class="sec-title">Agent topology: one supervisor, six specialists</h2></div>
 
     <p>
@@ -1182,7 +1190,7 @@
       <p>
         The delegation pattern is not free. <code>ask_advisor</code> costs <strong>three additional LLM calls</strong>
         inside one supervisor tool call, which is why the Tree-of-Thought evaluation case (A6) takes ~49 s against
-        ~13 s for a weather question. That is an accepted, measured trade: the branch/evaluate/select structure is
+        ~12 s for a weather question. That is an accepted, measured trade: the branch/evaluate/select structure is
         the point of that feature.
       </p>
     </div>
@@ -2076,7 +2084,7 @@
       <span class="tag">Honest trade-off</span>
       <p>
         Three sequential LLM calls is the dominant cost in the system: evaluation case A6 takes ~49 s against
-        ~13 s for a weather question. This was accepted rather than optimised away, because collapsing the three
+        ~12 s for a weather question. This was accepted rather than optimised away, because collapsing the three
         calls into one prompt would destroy the property that makes it Tree-of-Thought. If latency here ever
         became a product problem, the right fix is running BRANCH and the gather concurrently, or caching
         branches per question class — not merging the calls.
@@ -3128,7 +3136,7 @@
             Each stage closed a specific observed defect, not a hypothetical one. The filter closed a correctness
             bug where renters were grounded on owner-only covenants. BM25 closed the exact-identifier gap that
             citations depend on — embeddings blur <code>CC&amp;R 4.2</code> and <code>48-inch</code>. The reranker
-            closed the false-grounding bug. Measured overhead is ~0.04 ms and ~66 ms respectively, against a ~13 s
+            closed the false-grounding bug. Measured overhead is ~0.04 ms and ~66 ms respectively, against a ~10 s
             answer. And each stage degrades independently, so complexity does not translate into fragility. The
             corpus size is small today; the failure modes are not size-dependent.
           </p>
