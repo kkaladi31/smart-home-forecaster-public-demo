@@ -1,0 +1,95 @@
+{
+  "_comment": "PRIMARY demo home. 100% SYNTHETIC — the street address, the builder, the HOA, the utilities and every specification below are invented. Only the city and ZIP are real public geography, so that live free weather APIs (Open-Meteo, NWS) return genuine forecasts for a plausible point. No real property is described.",
+  "home_id": "demo-002",
+  "label": "Minneapolis, MN",
+  "is_primary": true,
+  "persona": "owner",
+  "address": "1412 Larkspur Lane, Minneapolis, MN 55409",
+  "jurisdiction": {
+    "city": "Minneapolis",
+    "county": "Hennepin County",
+    "state": "MN",
+    "timezone": "America/Chicago",
+    "building_department": "Minneapolis Construction Code Services (synthetic stand-in)",
+    "electrical_permit_authority": "Minnesota Department of Labor & Industry (synthetic stand-in)"
+  },
+  "dwelling_type": "single_family",
+  "year_built": 1998,
+  "builder": "Larkfield Residential (fictional)",
+  "model_name": "Winterhaven Series (fictional)",
+  "square_feet": 2340,
+  "stories": 2,
+  "bedrooms": 4,
+  "bathrooms": 2.5,
+  "lot_size_acres": 0.19,
+  "climate_zone": "IECC 6A (cold)",
+  "wall_construction": "wood-framed drywall interior, vinyl lap siding over rigid foam sheathing",
+  "roof": {
+    "material": "composition asphalt shingle",
+    "installed": "2014-08-01",
+    "ice_dam_prone": true,
+    "gutter_type": "aluminum K-style with heat cable on the north eave",
+    "attic_insulation_r_value": 49
+  },
+  "foundation": {
+    "type": "poured concrete full basement",
+    "has_sump_pump": true,
+    "perimeter_drain": true,
+    "basement_finished": true,
+    "frost_depth_in": 42
+  },
+  "estimated_value_usd": 438000,
+  "estimated_rent_usd_month": 2450,
+  "floor_plan_image": "floorplans/demo-002/demo-002_synthetic.svg",
+  "hoa": {
+    "has_hoa": true,
+    "association_name": "Lakeshore Commons Homeowners Association (synthetic)",
+    "governing_docs": ["lakeshore_commons_ccrs.md", "mn_short_term_rental_policy.md"]
+  },
+  "systems": {
+    "hvac": {
+      "type": "high-efficiency condensing gas furnace + central electric AC",
+      "manufacturer": "Northvale (fictional)",
+      "model": "NV96-Plus (fictional)",
+      "afue_pct": 96,
+      "filter_size": "20x25x4",
+      "filter_last_changed": "2026-06-15",
+      "filter_interval_days": 180
+    },
+    "water_heater": {
+      "type": "tank",
+      "fuel": "natural gas",
+      "capacity_gal": 50,
+      "installed": "2019-11-02",
+      "thermostat_f": 120
+    },
+    "ventilation": {
+      "type": "heat recovery ventilator (HRV)",
+      "installed": "2014-08-01",
+      "core_clean_interval_days": 180
+    }
+  },
+  "exposed_plumbing": {
+    "outdoor_spigots": 2,
+    "has_shutoff_valve_for_spigots": true,
+    "frost_free_spigots": true,
+    "pipes_in_unheated_spaces": ["garage", "rim joist cavity"],
+    "crawlspace_vents_closable": false
+  },
+  "appliances": [
+    {"type": "refrigerator", "brand": "Northvale (fictional)", "installed": "2019-05-10", "water_filter_interval_days": 180},
+    {"type": "dishwasher", "brand": "Cedarline (fictional)", "installed": "2019-05-10"},
+    {"type": "clothes_washer", "brand": "Cedarline (fictional)", "installed": "2021-02-20", "config": "front-load"},
+    {"type": "clothes_dryer", "brand": "Cedarline (fictional)", "installed": "2021-02-20", "fuel": "electric"},
+    {"type": "range", "brand": "Northvale (fictional)", "installed": "2019-05-10", "fuel": "gas"},
+    {"type": "sump_pump", "brand": "Larkfield (fictional)", "installed": "2022-04-08", "battery_backup": true}
+  ],
+  "utilities": {
+    "electric": "North Star Power (fictional)",
+    "gas": "Twin Rivers Gas (fictional)",
+    "water": "City of Minneapolis Water (synthetic stand-in)",
+    "sewer": "City of Minneapolis Sewer (synthetic stand-in)",
+    "trash": "Lakeshore Sanitation (fictional)"
+  },
+  "notes": "Cold-climate home. The dominant seasonal hazards are frozen and burst pipes during Arctic outbreaks, ice dams on the north eave after thaw-freeze cycles, and basement water intrusion during spring melt. Frost depth reaches 42 inches, so buried lines and footings sit deep. Summers are warm and humid but short."
+}

@@ -1,0 +1,1526 @@
+<title>Smart-Home Forecaster — How It Works</title>
+<style>
+  :root {
+    --ground:#F7F8F7; --surface:#FFFFFF; --surface-2:#EDF1EF;
+    --ink:#1A211F; --ink-soft:#586461; --ink-faint:#8A9693;
+    --rule:#DCE3E0; --rule-strong:#C2CCC8;
+    --accent:#116B5C; --accent-soft:#DCEDE8;
+    --c-core:#2F6396;  --c-core-soft:#E3EBF4;
+    --c-vari:#A85528;  --c-vari-soft:#F8E7DC;
+    --c-crit:#962C22;  --c-crit-soft:#F8E2DF;
+    --c-opt:#2C6B4F;   --c-opt-soft:#DFEDE6;
+    --c-store:#8A5A05; --c-store-soft:#F6E9D5;
+    --shadow:0 1px 2px rgba(26,33,31,.05), 0 8px 24px -16px rgba(26,33,31,.2);
+    --display:"Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+    --body:"Sitka Text", Charter, Cambria, Georgia, "Times New Roman", serif;
+    --mono:"Cascadia Mono", "Cascadia Code", Consolas, "SF Mono", Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ground:#0F1413; --surface:#161C1A; --surface-2:#1E2624;
+      --ink:#E4EAE8; --ink-soft:#9BA8A4; --ink-faint:#6F7B78;
+      --rule:#28322F; --rule-strong:#3A4643;
+      --accent:#4FBFA5; --accent-soft:#0E2A25;
+      --c-core:#6BA2D4;  --c-core-soft:#152230;
+      --c-vari:#D9855F;  --c-vari-soft:#2B1A12;
+      --c-crit:#D9786A;  --c-crit-soft:#2B1613;
+      --c-opt:#6DB893;   --c-opt-soft:#12241C;
+      --c-store:#D9A24E; --c-store-soft:#2C2110;
+      --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 28px -18px rgba(0,0,0,.8);
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground:#0F1413; --surface:#161C1A; --surface-2:#1E2624;
+    --ink:#E4EAE8; --ink-soft:#9BA8A4; --ink-faint:#6F7B78;
+    --rule:#28322F; --rule-strong:#3A4643;
+    --accent:#4FBFA5; --accent-soft:#0E2A25;
+    --c-core:#6BA2D4;  --c-core-soft:#152230;
+    --c-vari:#D9855F;  --c-vari-soft:#2B1A12;
+    --c-crit:#D9786A;  --c-crit-soft:#2B1613;
+    --c-opt:#6DB893;   --c-opt-soft:#12241C;
+    --c-store:#D9A24E; --c-store-soft:#2C2110;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 28px -18px rgba(0,0,0,.8);
+  }
+  :root[data-theme="light"] {
+    --ground:#F7F8F7; --surface:#FFFFFF; --surface-2:#EDF1EF;
+    --ink:#1A211F; --ink-soft:#586461; --ink-faint:#8A9693;
+    --rule:#DCE3E0; --rule-strong:#C2CCC8;
+    --accent:#116B5C; --accent-soft:#DCEDE8;
+    --c-core:#2F6396;  --c-core-soft:#E3EBF4;
+    --c-vari:#A85528;  --c-vari-soft:#F8E7DC;
+    --c-crit:#962C22;  --c-crit-soft:#F8E2DF;
+    --c-opt:#2C6B4F;   --c-opt-soft:#DFEDE6;
+    --c-store:#8A5A05; --c-store-soft:#F6E9D5;
+    --shadow:0 1px 2px rgba(26,33,31,.05), 0 8px 24px -16px rgba(26,33,31,.2);
+  }
+
+  * { box-sizing:border-box; }
+  body { background:var(--ground); color:var(--ink); font-family:var(--body);
+         font-size:18px; line-height:1.72; margin:0; -webkit-font-smoothing:antialiased; }
+
+  .shell { max-width:1180px; margin:0 auto; padding:0 24px 120px;
+           display:grid; grid-template-columns:minmax(0,1fr); }
+  @media (min-width:1080px){ .shell{ grid-template-columns:230px minmax(0,1fr); gap:56px; padding:0 40px 140px; } }
+
+  .masthead { grid-column:1/-1; padding:60px 0 30px; margin-bottom:44px;
+              border-bottom:2px solid var(--accent); }
+  .eyebrow { font-family:var(--display); font-size:11px; font-weight:700; letter-spacing:.16em;
+             text-transform:uppercase; color:var(--accent); margin:0 0 16px; }
+  .masthead h1 { font-family:var(--display); font-size:clamp(2.1rem,5vw,3.3rem); font-weight:700;
+                 letter-spacing:-.028em; line-height:1.05; margin:0 0 18px; text-wrap:balance; }
+  .standfirst { font-size:1.24rem; color:var(--ink-soft); max-width:60ch; margin:0 0 24px; }
+  .whofor { font-family:var(--display); font-size:13.5px; background:var(--accent-soft);
+            color:var(--accent); border-radius:5px; padding:12px 16px; max-width:62ch;
+            display:flex; gap:10px; align-items:flex-start; }
+  .whofor b { font-weight:700; }
+
+  .toc{ display:none; }
+  @media (min-width:1080px){ .toc{ display:block; position:sticky; top:28px; align-self:start;
+    max-height:calc(100vh - 56px); overflow-y:auto; font-family:var(--display); font-size:13px;
+    line-height:1.45; padding-bottom:40px; } }
+  .toc h2{ font-size:10px; font-weight:700; letter-spacing:.14em; text-transform:uppercase;
+    color:var(--ink-faint); margin:0 0 12px; padding-bottom:8px; border-bottom:1px solid var(--rule); }
+  .toc ol{ list-style:none; margin:0; padding:0; counter-reset:toc; }
+  .toc li{ counter-increment:toc; margin-bottom:3px; }
+  .toc a{ display:grid; grid-template-columns:22px 1fr; gap:4px; color:var(--ink-soft);
+    text-decoration:none; padding:4px 6px 4px 0; }
+  .toc a::before{ content:counter(toc); color:var(--ink-faint); font-variant-numeric:tabular-nums; font-size:11px; }
+  .toc a:hover{ color:var(--accent); }
+  .toc a:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
+
+  main{ min-width:0; }
+  section{ margin-bottom:72px; scroll-margin-top:24px; }
+  .sec-head{ display:flex; align-items:baseline; gap:14px; border-bottom:1px solid var(--rule-strong);
+    padding-bottom:12px; margin-bottom:24px; }
+  .sec-num{ font-family:var(--display); font-size:12px; font-weight:700; letter-spacing:.1em;
+    color:var(--accent); font-variant-numeric:tabular-nums; flex:none; padding-top:6px; }
+  h2.sec-title{ font-family:var(--display); font-size:clamp(1.45rem,3vw,1.9rem); font-weight:700;
+    letter-spacing:-.025em; line-height:1.16; margin:0; text-wrap:balance; }
+  h3{ font-family:var(--display); font-size:1.15rem; font-weight:650; margin:38px 0 12px; text-wrap:balance; }
+  p{ max-width:66ch; margin:0 0 18px; }
+  ul,ol{ max-width:64ch; margin:0 0 18px; padding-left:1.3em; }
+  li{ margin-bottom:9px; }
+  li::marker{ color:var(--ink-faint); }
+  a{ color:var(--accent); text-underline-offset:2px; }
+  code{ font-family:var(--mono); font-size:.83em; background:var(--surface-2); padding:.1em .34em;
+    border-radius:3px; border:1px solid var(--rule); word-break:break-word; }
+  .lede{ font-size:1.1rem; color:var(--ink-soft); max-width:64ch;
+    border-left:3px solid var(--accent); padding-left:18px; margin:0 0 26px; }
+  hr.rule{ border:0; border-top:1px solid var(--rule); margin:40px 0; }
+
+  /* analogy — the signature component of this document */
+  .analogy{ background:var(--accent-soft); border-radius:6px; padding:18px 22px; margin:24px 0;
+    max-width:66ch; border:1px solid color-mix(in srgb, var(--accent) 22%, transparent); }
+  .analogy .tag{ font-family:var(--display); font-size:10px; font-weight:700; letter-spacing:.14em;
+    text-transform:uppercase; color:var(--accent); display:block; margin-bottom:8px; }
+  .analogy p{ margin:0; }
+  .analogy p + p{ margin-top:12px; }
+
+  .note{ border:1px solid var(--rule); border-left:3px solid var(--ink-faint); background:var(--surface);
+    padding:16px 20px; margin:24px 0; border-radius:0 5px 5px 0; max-width:68ch; }
+  .note p:last-child{ margin-bottom:0; }
+  .note .tag{ font-family:var(--display); font-size:10px; font-weight:700; letter-spacing:.13em;
+    text-transform:uppercase; color:var(--ink-faint); display:block; margin-bottom:7px; }
+  .note.warn{ border-left-color:var(--c-crit); background:var(--c-crit-soft); }
+  .note.warn .tag{ color:var(--c-crit); }
+
+  /* glossary */
+  .terms{ display:grid; gap:0; border:1px solid var(--rule); border-radius:6px; overflow:hidden; margin:26px 0; }
+  .term{ display:grid; grid-template-columns:minmax(0,1fr); border-bottom:1px solid var(--rule);
+    padding:15px 18px; background:var(--surface); }
+  @media (min-width:640px){ .term{ grid-template-columns:172px minmax(0,1fr); gap:18px; } }
+  .term:last-child{ border-bottom:0; }
+  .term:nth-child(even){ background:color-mix(in srgb, var(--surface-2) 45%, transparent); }
+  .term dt{ font-family:var(--display); font-weight:700; font-size:14px; color:var(--accent);
+    letter-spacing:-.005em; }
+  .term dd{ margin:0; font-size:15.5px; line-height:1.6; color:var(--ink); }
+  .term dd em{ color:var(--ink-soft); font-style:normal; display:block; margin-top:5px; font-size:14px; }
+
+  /* code map */
+  .filemap{ font-family:var(--mono); font-size:13px; line-height:1.85; background:var(--surface);
+    border:1px solid var(--rule); border-radius:6px; padding:18px 20px; margin:24px 0; overflow-x:auto; }
+  .filemap .d{ color:var(--accent); font-weight:600; }
+  .filemap .c{ color:var(--ink-faint); font-family:var(--body); font-size:14px; }
+
+  .tw{ overflow-x:auto; margin:24px 0 28px; border:1px solid var(--rule); border-radius:5px; }
+  table{ border-collapse:collapse; width:100%; font-family:var(--display); font-size:14px; }
+  th{ text-align:left; font-weight:700; font-size:10.5px; letter-spacing:.1em; text-transform:uppercase;
+    color:var(--ink-faint); padding:11px 14px; border-bottom:1px solid var(--rule-strong);
+    background:var(--surface-2); white-space:nowrap; }
+  td{ padding:11px 14px; border-bottom:1px solid var(--rule); vertical-align:top; line-height:1.55; }
+  tbody tr:last-child td{ border-bottom:0; }
+  tbody tr:nth-child(even){ background:color-mix(in srgb, var(--surface-2) 42%, transparent); }
+
+  figure{ margin:30px 0 28px; border:1px solid var(--rule-strong); border-radius:5px;
+    background:var(--surface); box-shadow:var(--shadow); overflow:hidden; }
+  .fig-label{ font-family:var(--display); font-size:10px; font-weight:700; letter-spacing:.14em;
+    text-transform:uppercase; color:var(--ink-faint); padding:11px 18px;
+    border-bottom:1px solid var(--rule); background:var(--surface-2); }
+  .plate{ background:var(--surface); padding:22px 18px; overflow-x:auto; }
+  figcaption{ font-size:.95rem; color:var(--ink-soft); padding:14px 18px;
+    border-top:1px solid var(--rule); background:var(--surface); }
+  figcaption b{ color:var(--ink); }
+
+  .walk{ border-left:3px solid var(--accent); padding:2px 0 2px 20px; margin:0 0 32px; }
+  .walk h4{ margin:0 0 10px; font-family:var(--display); font-size:11px; letter-spacing:.13em;
+    text-transform:uppercase; color:var(--accent); }
+  .walk ol{ counter-reset:step; list-style:none; padding-left:0; }
+  .walk ol>li{ counter-increment:step; position:relative; padding-left:34px; }
+  .walk ol>li::before{ content:counter(step); position:absolute; left:0; top:.2em;
+    font-family:var(--display); font-size:11px; font-weight:700; color:var(--accent);
+    background:var(--accent-soft); width:22px; height:22px; border-radius:50%;
+    display:grid; place-items:center; font-variant-numeric:tabular-nums; }
+
+  /* --- diagram kit (subset) --- */
+  .dg{ font-family:var(--display); font-size:13.5px; line-height:1.45; min-width:0; }
+  .dg-legend{ display:flex; flex-wrap:wrap; gap:8px 18px; padding:0 0 16px; margin-bottom:18px;
+    border-bottom:1px solid var(--rule); }
+  .key{ display:inline-flex; align-items:center; gap:6px; font-size:10px; font-weight:700;
+    letter-spacing:.1em; text-transform:uppercase; color:var(--ink-faint); white-space:nowrap; }
+  .key i{ width:11px; height:11px; border-radius:2px; border:1.5px solid; flex:none; }
+  .key.core i{ border-color:var(--c-core); background:var(--c-core-soft); }
+  .key.vari i{ border-color:var(--c-vari); background:var(--c-vari-soft); }
+  .key.crit i{ border-color:var(--c-crit); background:var(--c-crit-soft); }
+  .key.opt i{ border-color:var(--c-opt); background:var(--c-opt-soft); }
+  .key.store i{ border-color:var(--c-store); background:var(--c-store-soft); }
+  .key.ext i{ border-color:var(--ink-faint); background:var(--surface-2); }
+
+  .nd{ border:1.5px solid var(--rule-strong); border-radius:5px; padding:10px 13px;
+    background:var(--surface); position:relative; min-width:0; }
+  .nd h5{ font-family:var(--display); font-size:13px; font-weight:700; margin:0; color:var(--ink); text-wrap:balance; }
+  .nd p{ font-size:12px; line-height:1.5; margin:5px 0 0; color:var(--ink-soft); max-width:none; }
+  .nd code{ font-size:11px; }
+  .nd .sub{ display:block; font-size:10px; font-weight:700; letter-spacing:.09em;
+    text-transform:uppercase; margin-bottom:4px; opacity:.85; }
+  .nd.core{ border-color:var(--c-core); background:var(--c-core-soft); }
+  .nd.core h5,.nd.core .sub{ color:var(--c-core); }
+  .nd.vari{ border-color:var(--c-vari); background:var(--c-vari-soft); }
+  .nd.vari h5,.nd.vari .sub{ color:var(--c-vari); }
+  .nd.crit{ border-color:var(--c-crit); background:var(--c-crit-soft); }
+  .nd.crit h5,.nd.crit .sub{ color:var(--c-crit); }
+  .nd.opt{ border-color:var(--c-opt); background:var(--c-opt-soft); }
+  .nd.opt h5,.nd.opt .sub{ color:var(--c-opt); }
+  .nd.store{ border-color:var(--c-store); background:var(--c-store-soft); }
+  .nd.store h5,.nd.store .sub{ color:var(--c-store); }
+  .nd.ext{ border-color:var(--rule-strong); background:var(--surface-2); }
+  .nd.ext h5,.nd.ext .sub{ color:var(--ink-soft); }
+  .nd .pin{ position:absolute; top:-9px; left:-9px; width:20px; height:20px; border-radius:50%;
+    display:grid; place-items:center; font-size:10.5px; font-weight:700;
+    font-variant-numeric:tabular-nums; background:var(--ink); color:var(--ground);
+    border:2px solid var(--surface); }
+
+  .flow{ display:flex; flex-direction:column; gap:0; min-width:0; }
+  .row{ display:flex; gap:12px; align-items:stretch; flex-wrap:wrap; min-width:0; }
+  .row>*{ flex:1 1 170px; min-width:0; }
+  .cols{ display:grid; gap:14px; min-width:0; }
+  @media (min-width:720px){ .cols.c2{ grid-template-columns:1fr 1fr; }
+    .cols.c3{ grid-template-columns:repeat(3,1fr); } .cols.c4{ grid-template-columns:repeat(4,1fr); } }
+
+  .arw{ display:flex; flex-direction:column; align-items:center; gap:3px; padding:8px 0;
+    color:var(--ink-faint); font-size:10.5px; font-weight:650; letter-spacing:.05em;
+    text-transform:uppercase; text-align:center; }
+  .arw::before{ content:""; width:1.5px; height:13px; background:currentColor; opacity:.5; }
+  .arw::after{ content:""; border:4.5px solid transparent; border-top-color:currentColor; opacity:.85; }
+  .arw span{ max-width:44ch; line-height:1.35; }
+  .arw.bad{ color:var(--c-crit); } .arw.good{ color:var(--c-opt); } .arw.tight{ padding:4px 0; }
+  .arwr{ display:flex; align-items:center; align-self:center; flex:0 0 auto; color:var(--ink-faint); padding:0 2px; }
+  .arwr::before{ content:""; width:16px; height:1.5px; background:currentColor; opacity:.5; }
+  .arwr::after{ content:""; border:4px solid transparent; border-left-color:currentColor; margin-left:-1px; opacity:.85; }
+
+  .fan{ position:relative; padding-top:16px; }
+  .fan::before{ content:""; position:absolute; top:0; left:12%; right:12%; height:12px;
+    border:1.5px solid var(--ink-faint); border-bottom:0; border-radius:6px 6px 0 0; opacity:.45; }
+
+  .grp{ border:1.5px dashed var(--rule-strong); border-radius:6px; padding:26px 14px 14px;
+    position:relative; min-width:0; background:color-mix(in srgb, var(--surface-2) 40%, transparent); }
+  .grp>.glab{ position:absolute; top:-1px; left:12px; transform:translateY(-50%);
+    background:var(--surface); padding:2px 9px; font-size:10px; font-weight:700; letter-spacing:.11em;
+    text-transform:uppercase; color:var(--ink-soft); border:1px solid var(--rule); border-radius:3px; }
+  .grp.core{ border-color:var(--c-core); } .grp.core>.glab{ color:var(--c-core); border-color:var(--c-core); }
+  .grp.crit{ border-color:var(--c-crit); } .grp.crit>.glab{ color:var(--c-crit); border-color:var(--c-crit); }
+  .grp.opt{ border-color:var(--c-opt); } .grp.opt>.glab{ color:var(--c-opt); border-color:var(--c-opt); }
+
+  .lanes{ display:grid; gap:0; border:1px solid var(--rule); border-radius:5px; overflow:hidden; }
+  .lane{ display:grid; grid-template-columns:136px minmax(0,1fr); border-bottom:1px solid var(--rule); }
+  .lane:last-child{ border-bottom:0; }
+  .lane>.lname{ padding:12px; background:var(--surface-2); font-size:10px; font-weight:700;
+    letter-spacing:.09em; text-transform:uppercase; color:var(--ink-soft);
+    border-right:1px solid var(--rule); display:flex; flex-direction:column;
+    justify-content:center; align-items:flex-start; gap:4px; }
+  .lane .lsub{ font-weight:600; letter-spacing:.01em; text-transform:none; font-size:10.5px;
+    opacity:.72; line-height:1.32; }
+  .lane>.lbody{ padding:12px; display:flex; flex-wrap:wrap; gap:10px; align-items:center; min-width:0; }
+  .lane.core>.lname{ color:var(--c-core); background:var(--c-core-soft); }
+  .lane.opt>.lname{ color:var(--c-opt); background:var(--c-opt-soft); }
+
+  .dg.focusing .nd:not(.lit){ opacity:.22; }
+  .dg.focusing .arw,.dg.focusing .arwr{ opacity:.22; }
+  .nd[data-id]{ cursor:default; }
+  .nd[data-id]:focus-visible{ outline:2px solid var(--accent); outline-offset:3px; }
+  .dg-hint{ font-size:10.5px; color:var(--ink-faint); font-style:italic; margin-top:14px;
+    padding-top:12px; border-top:1px dashed var(--rule); }
+  @media (hover:none){ .dg-hint{ display:none; } }
+
+  .qa{ border-top:1px solid var(--rule); }
+  .qa details{ border-bottom:1px solid var(--rule); }
+  .qa summary{ font-family:var(--display); font-weight:650; font-size:1.02rem; padding:15px 0 15px 28px;
+    cursor:pointer; list-style:none; position:relative; color:var(--ink); text-wrap:balance; }
+  .qa summary::-webkit-details-marker{ display:none; }
+  .qa summary::before{ content:"+"; position:absolute; left:4px; top:14px; color:var(--accent);
+    font-weight:700; font-size:1.1rem; }
+  .qa details[open] summary::before{ content:"\2212"; }
+  .qa summary:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
+  .qa .ans{ padding:0 0 18px 28px; }
+  .qa .ans p:last-child{ margin-bottom:0; }
+
+  @media (prefers-reduced-motion:reduce){ *{ animation:none !important; transition:none !important; } }
+</style>
+
+<div class="shell">
+
+  <header class="masthead">
+    <p class="eyebrow">A guided tour</p>
+    <h1>How the Smart-Home Forecaster works</h1>
+    <p class="standfirst">
+      An app that watches the weather at your house and warns you before your pipes freeze —
+      and can also tell you whether your HOA lets you rip up the lawn. This page explains how
+      it does that, from the top, assuming nothing.
+    </p>
+    <div class="whofor">
+      <span>👋</span>
+      <span><b>Who this is for:</b> anyone who wants to understand this system without already
+      knowing what RAG, ReAct, or a vector database is. Every term gets explained before it
+      gets used. If you want the deep version with the measurements and trade-offs, read the
+      Architecture Review document instead.</span>
+    </div>
+  </header>
+
+  <nav class="toc" aria-label="Contents">
+    <h2>Contents</h2>
+    <ol>
+      <li><a href="#s1">What it actually does</a></li>
+      <li><a href="#s2">The one big idea</a></li>
+      <li><a href="#s3">Words you'll need</a></li>
+      <li><a href="#s4">One question, start to finish</a></li>
+      <li><a href="#s5">The team of specialists</a></li>
+      <li><a href="#s6">Looking things up in documents</a></li>
+      <li><a href="#s7">How it remembers</a></li>
+      <li><a href="#s8">How it stays safe</a></li>
+      <li><a href="#s9">How it was made fast</a></li>
+      <li><a href="#s10">How we know it works</a></li>
+      <li><a href="#s11">Where things live in the code</a></li>
+      <li><a href="#s12">Run it yourself</a></li>
+      <li><a href="#s13">Questions you might have</a></li>
+    </ol>
+  </nav>
+
+  <main>
+
+  <!-- 1 -->
+  <section id="s1">
+    <div class="sec-head"><span class="sec-num">01</span><h2 class="sec-title">What it actually does</h2></div>
+
+    <p>
+      You type a question in plain English. You get back a specific, useful answer about
+      <em>your</em> house — with a note saying where the information came from.
+    </p>
+
+    <p>Four kinds of question work:</p>
+
+    <div class="tw">
+      <table>
+        <thead><tr><th>You ask</th><th>It answers</th></tr></thead>
+        <tbody>
+          <tr><td>"Are my pipes going to freeze this week?"</td><td>A risk level and exactly what to do tonight — drain the outdoor spigots, open the cabinet doors under the sink</td></tr>
+          <tr><td>"Can I replace my grass with stones?"</td><td>Yes or no, quoting the actual section of your HOA rules that says so</td></tr>
+          <tr><td>"How do I hang a 20 lb mirror?"</td><td>Several approaches, scored against your wall type, with the best one recommended</td></tr>
+          <tr><td>"How can I lower my power bill?"</td><td>A list of changes with real dollar amounts, using live electricity prices for your state</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Why can't ChatGPT just do this?</h3>
+
+    <p>
+      It genuinely can't, and the reason is worth understanding because the whole design flows
+      from it. A language model on its own has <strong>four specific gaps</strong>:
+    </p>
+
+    <ul>
+      <li>It doesn't know your address.</li>
+      <li>It doesn't know today's weather — its knowledge is frozen at whenever it was trained.</li>
+      <li>It has never seen your HOA's rulebook.</li>
+      <li>It has no way to check whether anything it just told you is true.</li>
+    </ul>
+
+    <p>
+      So this system's job is to close those gaps: give the model a way to look up real data,
+      real documents, and real prices — and then <em>constrain</em> what it's allowed to decide
+      on its own. That last part is the next section, and it's the most important idea here.
+    </p>
+  </section>
+
+  <!-- 2 -->
+  <section id="s2">
+    <div class="sec-head"><span class="sec-num">02</span><h2 class="sec-title">The one big idea</h2></div>
+
+    <p class="lede">
+      The language model routes, retrieves, and explains. It does not decide.
+    </p>
+
+    <p>
+      Every number that matters in this app — the freeze risk level, the dollar savings, whether
+      something counts as an emergency — is calculated by ordinary Python code. Boring,
+      predictable, testable code. The model never gets a vote.
+    </p>
+
+    <p>Here's the actual bug that led to this rule:</p>
+
+    <div class="note warn">
+      <span class="tag">The bug that shaped everything</span>
+      <p>
+        Early on, the model was shown a forecast with a low of <b>28°F</b> — well below freezing —
+        and it confidently reported <b>"no risk."</b> It wasn't lying. It just isn't reliable at
+        that kind of judgement, and there's no way to make it reliable through wording alone.
+      </p>
+      <p>
+        The fix wasn't a better prompt. It was to take the decision away from it entirely. Now a
+        function called <code>assess_freeze_risk</code> looks at the temperature and returns a
+        level from a fixed table: at or below 20°F is <b>severe</b>, 28°F is <b>high</b>, 32°F is
+        <b>moderate</b>, 36°F is <b>low</b>. The model is only allowed to <em>repeat</em> what
+        that function said.
+      </p>
+    </div>
+
+    <div class="analogy">
+      <span class="tag">Think of it like this</span>
+      <p>
+        The model is a very well-read receptionist. Brilliant at understanding what you're asking,
+        knowing who to route you to, and explaining the answer back to you in plain language.
+      </p>
+      <p>
+        But you would not let the receptionist read your X-ray. You send that to the machine that
+        measures things, and the receptionist reads you the result.
+      </p>
+    </div>
+
+    <p>
+      Keep this in mind for the rest of the page. When you see a diagram, the
+      <span style="color:var(--c-core);font-weight:700">blue boxes are code that decides</span> and
+      the <span style="color:var(--c-vari);font-weight:700">orange boxes are the model</span>. You
+      will notice how little orange there is.
+    </p>
+  </section>
+
+  <!-- 3 -->
+  <section id="s3">
+    <div class="sec-head"><span class="sec-num">03</span><h2 class="sec-title">Words you'll need</h2></div>
+
+    <p>
+      Nine terms. Read these once and the rest of the page will make sense. Come back if a word
+      stops making sense later.
+    </p>
+
+    <dl class="terms">
+      <div class="term">
+        <dt>Language model</dt>
+        <dd>The AI that reads and writes text — the "GPT" or "Claude" part.
+          <em>In this app it's reached over the internet through a service called OpenRouter, so
+          the specific model is just a setting we can change.</em></dd>
+      </div>
+      <div class="term">
+        <dt>Prompt</dt>
+        <dd>Everything we send the model: the instructions, plus the user's question.
+          <em>This app's instruction block is about 1,800 words. It's basically the job description.</em></dd>
+      </div>
+      <div class="term">
+        <dt>Token</dt>
+        <dd>How text gets chopped up for the model — roughly ¾ of a word. Everything is billed
+          and measured in tokens.
+          <em>"Are my pipes at risk?" is about 7 tokens.</em></dd>
+      </div>
+      <div class="term">
+        <dt>Tool</dt>
+        <dd>A normal function we let the model call — like <code>get_weather_forecast</code>.
+          <em>The model can't run code. It replies "please call this function with these
+          arguments," our code runs it, and we hand back the result.</em></dd>
+      </div>
+      <div class="term">
+        <dt>Agent</dt>
+        <dd>A model in a loop with tools. It thinks, calls a tool, sees the result, thinks
+          again — until it has enough to answer.
+          <em>That loop is the difference between a chatbot and an agent.</em></dd>
+      </div>
+      <div class="term">
+        <dt>ReAct</dt>
+        <dd>The name of that loop: <b>Rea</b>son, then <b>Act</b>, then observe, then repeat.
+          <em>It ends when the model replies with words instead of a tool request.</em></dd>
+      </div>
+      <div class="term">
+        <dt>Embedding</dt>
+        <dd>Text turned into a list of numbers that captures its <em>meaning</em>. Similar
+          meanings produce similar numbers.
+          <em>This is what lets "put rocks in my yard" find a document about "xeriscaping" with
+          no words in common.</em></dd>
+      </div>
+      <div class="term">
+        <dt>Vector database</dt>
+        <dd>A database that stores embeddings and can find the closest matches fast.
+          <em>This app uses one called Chroma, which runs inside the app — no server to set up.</em></dd>
+      </div>
+      <div class="term">
+        <dt>RAG</dt>
+        <dd><b>R</b>etrieval-<b>A</b>ugmented <b>G</b>eneration. Fancy name, simple idea:
+          before answering, go find relevant documents and paste them into the prompt.
+          <em>That's it. Section 6 shows how this app does it.</em></dd>
+      </div>
+    </dl>
+  </section>
+
+  <!-- 4 -->
+  <section id="s4">
+    <div class="sec-head"><span class="sec-num">04</span><h2 class="sec-title">One question, start to finish</h2></div>
+
+    <p>
+      Let's follow a real question all the way through: <strong>"Are my pipes at risk of freezing
+      in the next two days?"</strong>
+    </p>
+
+    <figure>
+      <div class="fig-label">Figure 1 · What happens after you press Send</div>
+      <div class="plate">
+        <div class="dg">
+          <div class="dg-legend">
+            <span class="key crit"><i></i>Safety check</span>
+            <span class="key opt"><i></i>Shortcut</span>
+            <span class="key core"><i></i>Our code decides</span>
+            <span class="key vari"><i></i>The model</span>
+          </div>
+
+          <div class="nd" data-id="you" data-links="safe"><h5>You press Send</h5>
+            <p>"Are my pipes at risk of freezing in the next two days?"</p></div>
+          <div class="arw"></div>
+
+          <div class="nd crit" data-id="safe" data-links="you cache"><span class="pin">1</span>
+            <h5>Safety check first — always</h5>
+            <p>Is this an emergency? A gas leak, a fire, a pipe already burst? If yes, we skip
+              the model entirely and return emergency instructions. This one is a question about
+              the future, so it passes through.</p>
+          </div>
+          <div class="arw"></div>
+
+          <div class="nd opt" data-id="cache" data-links="safe mem"><span class="pin">2</span>
+            <h5>Have we answered this recently?</h5>
+            <p>We check twice — once for the exact words, once for the same <em>meaning</em>.
+              A hit returns in 0.3 seconds instead of 13. Today, no hit.</p>
+          </div>
+          <div class="arw"></div>
+
+          <div class="nd opt" data-id="mem" data-links="cache turn1"><span class="pin">3</span>
+            <h5>Do we remember anything relevant?</h5>
+            <p>Search past conversations. If you told us last week that you actually live in
+              Minneapolis, that gets added as context.</p>
+          </div>
+          <div class="arw"></div>
+
+          <div class="nd vari" data-id="turn1" data-links="mem tool"><span class="pin">4</span>
+            <span class="sub">Model, trip 1 of 2</span>
+            <h5>"I need the weather for this address"</h5>
+            <p>The model doesn't answer yet. It replies with a request to run a tool.</p>
+          </div>
+          <div class="arw"></div>
+
+          <div class="grp core" data-id="tool" data-links="turn1 turn2">
+            <span class="glab">Our code runs — no model involved</span>
+            <div class="flow">
+              <div class="nd core"><h5>Turn the address into map coordinates</h5>
+                <p>Using the US Census address lookup.</p></div>
+              <div class="arw tight"><span>then, all three at once</span></div>
+              <div class="row" style="gap:8px">
+                <div class="nd opt"><h5>Elevation</h5><p>Higher ground runs colder</p></div>
+                <div class="nd opt"><h5>Forecast</h5><p>From the National Weather Service</p></div>
+                <div class="nd opt"><h5>Official alerts</h5><p>Any active warnings</p></div>
+              </div>
+              <div class="arw tight"></div>
+              <div class="nd core"><span class="pin">5</span>
+                <h5>Decide the risk level — in code</h5>
+                <p>Lowest temperature is 26°F, so the table says <b>high</b>. The model had no
+                  say in this. It also gets the matching list of protective actions.</p>
+              </div>
+            </div>
+          </div>
+          <div class="arw"></div>
+
+          <div class="nd vari" data-id="turn2" data-links="tool ans"><span class="pin">6</span>
+            <span class="sub">Model, trip 2 of 2</span>
+            <h5>Write it up</h5>
+            <p>Now it gets the verdict and turns it into a readable answer — bold conclusion
+              first, then numbered steps. It's instructed to quote the risk level exactly.</p>
+          </div>
+          <div class="arw"></div>
+
+          <div class="nd" data-id="ans" data-links="turn2"><h5>You see the answer</h5>
+            <p>Streamed word by word as it's written, with the tool steps shown live above it.</p></div>
+          <p class="dg-hint">Hover or tab any box to see what connects to it.</p>
+        </div>
+      </div>
+      <figcaption><b>Notice how little the model does.</b> Two short trips: one to say what it
+        needs, one to write the answer. Everything factual happened in between.</figcaption>
+    </figure>
+
+    <div class="walk">
+      <h4>The parts worth understanding</h4>
+      <ol>
+        <li><strong>Safety runs before everything, on your live words.</strong> If it ran after the
+          cache, we could serve you a saved answer for a message that <em>this time</em> says
+          "there's a gas leak." Order matters.</li>
+        <li><strong>The cache checks meaning, not just spelling.</strong> "Can I put rocks in my
+          backyard?" and "Am I allowed to replace my grass with stones?" are treated as the same
+          question. But only if the location and your role match exactly — the same words about a
+          different city are a different question.</li>
+        <li><strong>The three weather lookups happen simultaneously.</strong> Once we know the
+          coordinates, elevation, forecast, and alerts don't depend on each other. Running them
+          at the same time costs one lookup's worth of waiting instead of three.</li>
+        <li><strong>Step 5 is the whole philosophy in one box.</strong> A plain function looked at
+          26°F and returned "high." No AI. That's why the answer is trustworthy.</li>
+        <li><strong>Two model trips, not seven.</strong> This used to take five separate trips and
+          29 seconds, because the model had to ask for each piece of data one at a time. Section 9
+          explains how that was fixed.</li>
+      </ol>
+    </div>
+  </section>
+
+  <!-- 5 -->
+  <section id="s5">
+    <div class="sec-head"><span class="sec-num">05</span><h2 class="sec-title">The team of specialists</h2></div>
+
+    <p>
+      That last example only used the weather path. But questions vary a lot, so the system is
+      built like a small team: a <strong>supervisor</strong> reads your question, decides who
+      should handle it, and combines the results if more than one applies.
+    </p>
+
+    <figure>
+      <div class="fig-label">Figure 2 · Who handles what</div>
+      <div class="plate">
+        <div class="dg">
+          <div class="dg-legend">
+            <span class="key core"><i></i>Plain code — no AI</span>
+            <span class="key vari"><i></i>Uses the model</span>
+          </div>
+          <div class="nd core" data-id="r" data-links="sup"><span class="pin">1</span>
+            <span class="sub">The router — no AI at all</span>
+            <h5>Labels your question before anything else runs</h5>
+            <p>Takes about a tenth of a millisecond. It <em>advises</em> the supervisor and can
+              never block a tool or change an answer.</p>
+          </div>
+          <div class="nd vari" data-id="sup" data-links="r a c pf t"><span class="pin">2</span>
+            <span class="sub">The supervisor</span>
+            <h5>Reads your question and decides who handles it</h5>
+            <p>Its own instructions name the specialists and when to use each.</p>
+          </div>
+          <div class="fan">
+            <div class="cols c3">
+              <div class="nd vari" data-id="a" data-links="sup cr re"><span class="pin">3</span>
+                <span class="sub">Advisor</span>
+                <h5>"How do I…?"</h5>
+                <p>Proposes several ways to do the job, scores them, throws out the ones that
+                  break a rule, and recommends what survives.</p>
+              </div>
+              <div class="nd vari" data-id="c" data-links="sup">
+                <span class="sub">Cost</span>
+                <h5>Bills and savings</h5>
+                <p>Gets live electricity prices. <b>The arithmetic is code</b> — the model only
+                  writes it up.</p>
+              </div>
+              <div class="nd core" data-id="pf" data-links="sup"><span class="pin">4</span>
+                <span class="sub">Pro Finder — no AI at all</span>
+                <h5>Licensed professionals</h5>
+                <p>Registration is a <b>gate</b>: anyone whose licence is not current is never
+                  recommended, and you are told why.</p>
+              </div>
+            </div>
+            <div class="cols c2">
+              <div class="nd vari" data-id="cr" data-links="a"><span class="pin">5</span>
+                <span class="sub">Critic — works for the Advisor</span>
+                <h5>Scores each option</h5>
+                <p><b>It never picks the winner.</b> That is done by code, so the recommendation
+                  always matches the scores you can see.</p>
+              </div>
+              <div class="nd vari" data-id="re" data-links="a">
+                <span class="sub">Researcher — works for the Advisor</span>
+                <h5>Searches the web</h5>
+                <p>Screens pages for hostile text, ranks what survives by how authoritative it
+                  is, and cites it.</p>
+              </div>
+            </div>
+            <div class="nd core" data-id="t" data-links="sup">
+              <span class="sub">Tools — plain code, no AI</span>
+              <h5>Weather · Policy search · Safety screens</h5>
+              <p>Forecasts and hazard ratings from fixed rules; document search that quotes the
+                source or admits it has none; guardrails that run before the model.</p>
+            </div>
+          </div>
+          <p class="dg-hint">Hover or tab any box to see what connects to it.</p>
+        </div>
+      </div>
+      <figcaption><b>Seven agents, and three of them never use AI at all</b> — the Router, the
+        Pro Finder, and the whole control half of the Advisor. <b>Weather, policy search and the
+        safety screens are tools, not agents</b>: an agent is something that can be wrong in a way
+        nothing else catches, and looking up a forecast cannot be wrong that way — it either
+        returns the forecast or it fails visibly.</figcaption>
+    </figure>
+
+    <div class="walk">
+      <h4>The parts worth understanding</h4>
+      <ol>
+        <li><strong>Routing is written down, not learned.</strong> The supervisor's instructions
+          literally say: <em>if the question mentions a bill, cost, rate, or saving money, always
+          use COST.</em> That rule exists because without it, money questions went to the Advisor
+          and came back with no dollar figures in them. The Router adds a second, cheaper opinion
+          in front of that — but only ever as a hint.</li>
+        <li><strong>The Router runs on every single turn, so it cannot cost anything.</strong>
+          Including the turns that hit the cache and never reach a model at all. A router that
+          costs a model call is one you cannot afford to run <em>before</em> deciding whether to
+          spend a model call. It matches known phrases and compares your sentence to example
+          questions — no AI, about a tenth of a millisecond.</li>
+        <li><strong>The Advisor is the expensive one.</strong> It searches: proposes four
+          approaches, scores them, discards the ones that break a rule, then develops the two that
+          survive. Up to four model calls plus one to write the answer. A weather question takes
+          ~12 seconds; an Advisor question takes ~44.</li>
+        <li><strong>Why a search instead of one call?</strong> Ask a model in a single prompt to
+          "consider several options and pick the best" and you get a conclusion with reasoning
+          written around it. Searching produces a genuine list of options with scores you can see
+          and disagree with — and the winner is chosen <b>by code</b>, so the recommendation cannot
+          quietly differ from the scores on screen.</li>
+        <li><strong>One question can use two specialists.</strong> "It's going to freeze — can I
+          run a space heater in the garage under my lease?" needs the weather tools and the policy
+          search, and the supervisor merges both into one answer.</li>
+      </ol>
+    </div>
+  </section>
+
+  <!-- 6 -->
+  <section id="s6">
+    <div class="sec-head"><span class="sec-num">06</span><h2 class="sec-title">Looking things up in documents</h2></div>
+
+    <p>
+      This is the RAG part. The app has a small library — HOA rules, a city permit checklist,
+      short-term-rental rules, a renter policy, a freeze-prevention guide, an appliance care
+      guide. When you ask "am I allowed to…", it searches that library and answers <em>only</em>
+      from what it finds.
+    </p>
+
+    <div class="analogy">
+      <span class="tag">Think of it like this</span>
+      <p>
+        Imagine a librarian who is not allowed to answer from memory. You ask a question, they
+        walk into the stacks, come back with three pages, and read you the relevant part — and if
+        they can't find a page that answers it, they say <em>"we don't have anything on that,"</em>
+        rather than guessing.
+      </p>
+      <p>That refusal is the most important behaviour in this whole section.</p>
+    </div>
+
+    <h3>Searching happens in three passes</h3>
+
+    <figure>
+      <div class="fig-label">Figure 3 · Three passes, narrowing each time</div>
+      <div class="plate">
+        <div class="dg">
+          <div class="dg-legend">
+            <span class="key core"><i></i>Search step</span>
+            <span class="key opt"><i></i>Found an answer</span>
+            <span class="key crit"><i></i>Admits it doesn't know</span>
+          </div>
+
+          <div class="nd" data-id="q" data-links="p1"><h5>"Can I replace my grass with stones?"</h5></div>
+          <div class="arw"></div>
+
+          <div class="nd core" data-id="p1" data-links="q p2"><span class="pin">1</span>
+            <span class="sub">Pass 1 · Narrow the shelf</span>
+            <h5>Only look at documents that apply to you</h5>
+            <p>Are you the owner or a renter? Tenant-rights material is hidden from owners, and
+              owner-only rental rules are hidden from renters. Anything that binds
+              <b>both</b> — like the HOA rules — stays visible to everyone.</p>
+          </div>
+          <div class="arw"></div>
+
+          <div class="nd core" data-id="p2" data-links="p1 p3"><span class="pin">2</span>
+            <span class="sub">Pass 2 · Two searches at once</span>
+            <h5>Search by meaning <em>and</em> by exact words</h5>
+            <p><b>By meaning:</b> finds the xeriscaping section even though you said "stones"
+              and it says "gravel."<br>
+              <b>By exact words:</b> finds "CC&amp;R 4.2" or "48-inch" — the precise terms that
+              meaning-search blurs together, and exactly what a citation needs.</p>
+          </div>
+          <div class="arw"></div>
+
+          <div class="nd core" data-id="p3" data-links="p2 yes no"><span class="pin">3</span>
+            <span class="sub">Pass 3 · Double-check</span>
+            <h5>Re-read each page <em>next to</em> the question</h5>
+            <p>A second, slower model reads the question and the page <b>together</b> and scores
+              how well it actually answers it. See below for why this matters so much.</p>
+          </div>
+          <div class="arw"><span>is the best score good enough?</span></div>
+
+          <div class="cols c2">
+            <div class="nd opt" data-id="yes" data-links="p3">
+              <span class="sub">Yes</span>
+              <h5>Answer, and quote the source</h5>
+              <p>"Yes — with ARC approval, per Maple Grove HOA CC&amp;Rs § 4.2."</p>
+            </div>
+            <div class="nd crit" data-id="no" data-links="p3">
+              <span class="sub">No</span>
+              <h5>Throw the pages away entirely</h5>
+              <p>The model is told there's no source, and says so. We don't hand it weak pages
+                and hope it ignores them.</p>
+            </div>
+          </div>
+          <p class="dg-hint">Hover or tab any box to see what connects to it.</p>
+        </div>
+      </div>
+      <figcaption><b>Pass 3 is the one that stops it making things up.</b> The story below is
+        the clearest example in the whole project.</figcaption>
+    </figure>
+
+    <h3>The pet tiger</h3>
+
+    <p>
+      Someone tested the app with a deliberately silly question: <strong>"Am I allowed to keep a
+      pet tiger in my backyard?"</strong>
+    </p>
+
+    <p>
+      There is obviously nothing about tigers in the HOA rules. But the search returned the
+      landscaping section with a confidence of <strong>0.409</strong> — and the cutoff for
+      "good enough to answer from" was <strong>0.35</strong>. It passed. The app was one step away
+      from inventing an HOA rule about tigers.
+    </p>
+
+    <p>Why did that happen? Because of <em>how</em> the fast search works:</p>
+
+    <div class="analogy">
+      <span class="tag">Think of it like this</span>
+      <p>
+        The fast search reads the question and the page <b>separately</b>, turns each into
+        numbers, and checks whether the numbers are close. It's really asking <em>"are these
+        two things about similar stuff?"</em>
+      </p>
+      <p>
+        Both mention a backyard. So: yes, similar stuff. It was never asking the question that
+        actually matters — <em>"does this page answer this question?"</em>
+      </p>
+      <p>
+        Pass 3 uses a slower model that reads the question and the page <b>at the same time</b>,
+        so it can answer that second question properly. It's too slow to read the whole library
+        this way, which is why it only re-reads the handful of pages the fast search already found.
+      </p>
+    </div>
+
+    <div class="tw">
+      <table>
+        <thead><tr><th>Question</th><th>Fast search</th><th>Careful re-read</th></tr></thead>
+        <tbody>
+          <tr><td>"Replace grass with stones" — genuinely in the rules</td><td>0.498 ✅</td><td>−1.25 ✅</td></tr>
+          <tr><td>"Keep a pet tiger" — not in the rules at all</td><td>0.409 ❌ <em>passed!</em></td><td>−8.41 ✅ <em>rejected</em></td></tr>
+          <tr><td><b>Gap between them</b></td><td><b>0.09</b> — far too close to call</td><td><b>7.16</b> — no contest</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>
+      The scores look odd because the two methods use completely different scales — don't try to
+      compare across the columns. What matters is the <em>gap within each column</em>. The fast
+      search put a real match and a nonsense match 0.09 apart, straddling the cutoff. The careful
+      re-read put them 7 points apart, with a wide empty band in between where a cutoff can
+      safely sit.
+    </p>
+  </section>
+
+  <!-- 7 -->
+  <section id="s7">
+    <div class="sec-head"><span class="sec-num">07</span><h2 class="sec-title">How it remembers</h2></div>
+
+    <p>
+      Language models have no memory between messages. Every request starts from nothing. So if
+      you want a real conversation, you have to build memory yourself — and this app has four
+      different kinds, because they solve different problems.
+    </p>
+
+    <figure>
+      <div class="fig-label">Figure 4 · Four kinds of memory</div>
+      <div class="plate">
+        <div class="dg">
+          <div class="dg-legend">
+            <span class="key core"><i></i>Lives in memory</span>
+            <span class="key store"><i></i>Saved to disk</span>
+            <span class="key opt"><i></i>A speed trick, not memory</span>
+          </div>
+          <div class="lanes">
+            <div class="lane core">
+              <div class="lname">Working<span class="lsub">this one answer</span></div>
+              <div class="lbody">
+                <div class="nd core" style="flex:1 1 100%"><h5>The notepad for the current question</h5>
+                  <p>Holds the tool results while the answer is being worked out. This is how the
+                    model's second trip can see what the weather lookup returned on the first.
+                    Thrown away when the answer is done.</p></div>
+              </div>
+            </div>
+            <div class="lane">
+              <div class="lname">Conversation<span class="lsub">this chat</span></div>
+              <div class="lbody">
+                <div class="nd store" style="flex:1 1 100%"><h5>Everything said in this chat</h5>
+                  <p>Saved to a file, so it survives restarting the app. This is what makes
+                    <em>"what about tomorrow?"</em> work without you repeating yourself — and what
+                    makes a correction stick if you say "actually my house is in Minneapolis."</p></div>
+              </div>
+            </div>
+            <div class="lane">
+              <div class="lname">Long-term<span class="lsub">every past chat</span></div>
+              <div class="lbody">
+                <div class="nd store" style="flex:1 1 100%"><h5>A record of every question ever asked</h5>
+                  <p>Searchable <em>by meaning</em>, so "what did you tell me about my pipes?" finds
+                    the freeze conversation from last month even with no words in common. Saved
+                    automatically after every answer — we don't rely on the model to remember to
+                    save things.</p></div>
+              </div>
+            </div>
+            <div class="lane">
+              <div class="lname">The library<span class="lsub">reference docs</span></div>
+              <div class="lbody">
+                <div class="nd store" style="flex:1 1 100%"><h5>The HOA rules and other documents</h5>
+                  <p>Section 6's library. This is reference material, not something you said —
+                    which is why the "clear all memory" button deliberately leaves it alone.</p></div>
+              </div>
+            </div>
+            <div class="lane opt">
+              <div class="lname">Answer cache<span class="lsub">8–30 minutes</span></div>
+              <div class="lbody">
+                <div class="nd opt" style="flex:1 1 100%"><h5>Recently given answers</h5>
+                  <p>Not really memory — a shortcut. Drawn here so you can see how it differs:
+                    it exists to make repeats fast, not to help the app understand you.</p></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <figcaption><b>They're separate because they fail differently.</b> Bad long-term recall
+        gives you a slightly off answer. A broken library invents fake HOA rules.</figcaption>
+    </figure>
+
+    <div class="walk">
+      <h4>The parts worth understanding</h4>
+      <ol>
+        <li><strong>Old messages get summarised, not deleted.</strong> Once a conversation gets
+          long, older parts are compressed into a summary while the last six messages are kept
+          word for word. If we just chopped off the old ones, a correction you made early would
+          silently vanish.</li>
+        <li><strong>Weak memories are ignored completely.</strong> A past conversation only gets
+          pulled in if it's genuinely relevant. Below that bar, nothing is added and the model is
+          never even told a weak match existed — because passing along a barely-related memory
+          "with a caveat" reliably drags the answer toward the wrong topic.</li>
+        <li><strong>Anything time-sensitive is re-checked.</strong> The model is explicitly told
+          that a remembered forecast is stale and must be looked up again. Memory is for what you
+          <em>said</em>, not for what the weather <em>was</em>.</li>
+        <li><strong>Deleting a chat cleans up all three places it lives.</strong> The conversation
+          file, the long-term record, and the search index. Clearing only some of them leaves the
+          app in a confusing half-remembering state.</li>
+      </ol>
+    </div>
+  </section>
+
+  <!-- 8 -->
+  <section id="s8">
+    <div class="sec-head"><span class="sec-num">08</span><h2 class="sec-title">How it stays safe</h2></div>
+
+    <p>
+      This app gives advice about gas, electricity, water, and heat — things that genuinely hurt
+      people. So there are four checks, and they all run <strong>before</strong> the model sees
+      your message. They're written as pattern-matching rules in plain code, not as instructions
+      in the prompt.
+    </p>
+
+    <div class="note">
+      <span class="tag">Why not just tell the model to be careful?</span>
+      <p>
+        Because a model can be talked out of an instruction, and it doesn't behave identically
+        every time. Code that runs before the model is even called can't be argued with. When
+        something is genuinely dangerous, you want the boring guarantee.
+      </p>
+    </div>
+
+    <figure>
+      <div class="fig-label">Figure 5 · Four checks, one of which stops everything</div>
+      <div class="plate">
+        <div class="dg">
+          <div class="dg-legend">
+            <span class="key crit"><i></i>Stops the model running</span>
+            <span class="key vari"><i></i>Adds a rule to the prompt</span>
+            <span class="key opt"><i></i>Prevents a false alarm</span>
+          </div>
+
+          <div class="nd" data-id="msg" data-links="e"><h5>Your message</h5></div>
+          <div class="arw"></div>
+
+          <div class="nd crit" data-id="e" data-links="msg supp"><span class="pin">1</span>
+            <span class="sub">Check 1 — the only one that blocks</span>
+            <h5>Is this an emergency right now?</h5>
+            <p>Gas smell, carbon monoxide alarm, fire, a pipe already burst, sparks, heat stroke.
+              If matched: <b>the model never runs.</b> You get fixed, human-written instructions —
+              "get out, don't touch switches, call 911 from outside."</p>
+          </div>
+          <div class="arw"></div>
+
+          <div class="nd opt" data-id="supp" data-links="e rest"><span class="pin">2</span>
+            <h5>…unless you're asking how to <em>prevent</em> it</h5>
+            <p>"How do I <b>prevent</b> a burst pipe" is this app's single most important
+              feature — and it originally triggered the emergency alarm. Now words like
+              <em>prevent, avoid, protect, winterize, in case</em> switch the alarm off.</p>
+          </div>
+          <div class="arw"></div>
+
+          <div class="grp" data-id="rest" data-links="supp">
+            <span class="glab">Checks 2–4 · These don't block, they add a rule</span>
+            <div class="cols c3">
+              <div class="nd vari"><span class="pin">3</span>
+                <h5>Dangerous DIY</h5>
+                <p>Breaker panels, gas lines, load-bearing walls, asbestos, roofs. You still get
+                  a useful answer about cost, permits, and hiring — just never step-by-step
+                  instructions.</p></div>
+              <div class="nd vari">
+                <h5>Acting on your behalf</h5>
+                <p>"Email my landlord." It writes a draft and tells you to send it. The app has
+                  <b>no ability to send, book, or buy anything</b> — this rule is a second layer
+                  on top of that.</p></div>
+              <div class="nd vari">
+                <h5>Personal information</h5>
+                <p>Social security numbers, card numbers, emails. Detected, not repeated back,
+                  and that message is never saved to memory at all.</p></div>
+            </div>
+          </div>
+          <p class="dg-hint">Hover or tab any box to see what connects to it.</p>
+        </div>
+      </div>
+      <figcaption><b>Box 2 is the lesson worth remembering.</b> A safety check that fires on your
+        main feature is worse than no safety check.</figcaption>
+    </figure>
+
+    <p>
+      There's a fifth safety property that isn't a check at all: <strong>the app cannot do
+      anything in the real world.</strong> There is no code anywhere in it that sends an email,
+      books an appointment, or spends money. Even if every other guardrail failed, the worst
+      outcome is bad text on a screen.
+    </p>
+  </section>
+
+  <!-- 9 -->
+  <section id="s9">
+    <div class="sec-head"><span class="sec-num">09</span><h2 class="sec-title">How it was made fast</h2></div>
+
+    <p>
+      A weather question used to take <strong>29 seconds</strong>. It now takes
+      <strong>13.5</strong>. The fix is a genuinely useful lesson about how these systems behave.
+    </p>
+
+    <h3>The thing that was slow wasn't what anyone expected</h3>
+
+    <p>
+      The obvious suspect was the internet lookups — weather, elevation, alerts. But those take
+      milliseconds. The real cost was <strong>how many times we had to go back to the model</strong>.
+    </p>
+
+    <p>
+      Remember the ReAct loop: the model asks for one tool, sees the result, then decides what to
+      ask for next. It can't ask for the second thing until it's seen the first. So getting five
+      pieces of data meant five separate round trips, each taking several seconds.
+    </p>
+
+    <div class="analogy">
+      <span class="tag">Think of it like this</span>
+      <p>
+        You're cooking, and you send someone to the shop for one ingredient at a time. They walk
+        there and back for the flour. Then again for the eggs. Then again for the butter.
+      </p>
+      <p>
+        The shop isn't far. <em>The walking is the problem.</em> The fix isn't a faster shop —
+        it's writing one list.
+      </p>
+    </div>
+
+    <figure>
+      <div class="fig-label">Figure 6 · Before and after</div>
+      <div class="plate">
+        <div class="dg">
+          <div class="dg-legend">
+            <span class="key vari"><i></i>A trip to the model — slow</span>
+            <span class="key core"><i></i>A data lookup — fast</span>
+            <span class="key opt"><i></i>Happening at the same time</span>
+          </div>
+          <div class="cols c2">
+            <div class="grp crit">
+              <span class="glab">Before — 29 seconds</span>
+              <div class="flow">
+                <div class="nd vari"><h5>Model: "what's the address?"</h5></div>
+                <div class="arw tight"></div><div class="nd core"><h5>look up profile</h5></div>
+                <div class="arw tight"></div><div class="nd vari"><h5>Model: "coordinates?"</h5></div>
+                <div class="arw tight"></div><div class="nd core"><h5>look up coordinates</h5></div>
+                <div class="arw tight"></div><div class="nd vari"><h5>Model: "elevation?"</h5></div>
+                <div class="arw tight"></div><div class="nd core"><h5>look up elevation</h5></div>
+                <div class="arw tight"></div><div class="nd vari"><h5>Model: "forecast?"</h5></div>
+                <div class="arw tight"></div><div class="nd core"><h5>look up forecast</h5></div>
+                <div class="arw tight"></div><div class="nd vari"><h5>Model: "any alerts?"</h5></div>
+                <div class="arw tight"></div><div class="nd core"><h5>look up alerts</h5></div>
+                <div class="arw tight"></div><div class="nd vari"><h5>Model: writes the answer</h5></div>
+              </div>
+            </div>
+            <div class="grp opt">
+              <span class="glab">After — 13.5 seconds</span>
+              <div class="flow">
+                <div class="nd vari"><h5>Model: "check the hazards here"</h5>
+                  <p>One request instead of five</p></div>
+                <div class="arw tight"></div>
+                <div class="nd core"><h5>look up coordinates</h5><p>Needed before the rest</p></div>
+                <div class="fan" style="margin-top:12px">
+                  <div class="row" style="gap:8px">
+                    <div class="nd opt"><h5>elevation</h5></div>
+                    <div class="nd opt"><h5>forecast</h5></div>
+                    <div class="nd opt"><h5>alerts</h5></div>
+                  </div>
+                </div>
+                <div class="arw tight"><span>all three at once</span></div>
+                <div class="nd core"><h5>work out the risk level</h5>
+                  <p>Exactly the same code as before</p></div>
+                <div class="arw tight"></div>
+                <div class="nd vari"><h5>Model: writes the answer</h5></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <figcaption><b>Nothing about the answer changed.</b> Same lookups, same risk calculation,
+        same result — just fewer trips to get there.</figcaption>
+    </figure>
+
+    <h3>Three smaller wins</h3>
+
+    <div class="tw">
+      <table>
+        <thead><tr><th>What</th><th>The idea</th><th>Result</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><b>Sending less text</b></td>
+            <td>The forecast came back as 48 hourly readings. The model only ever used the highest
+              and lowest — but all 48 got re-sent on <em>every</em> later message in the chat.
+              Now it gets a summary.</td>
+            <td>~1,400 tokens saved per message</td>
+          </tr>
+          <tr>
+            <td><b>Not re-sending the instructions</b></td>
+            <td>The instruction block is the same every single time. Some models let you mark it
+              as reusable so it doesn't get charged for again.</td>
+            <td><b>11.5× cheaper</b> on that part</td>
+          </tr>
+          <tr>
+            <td><b>Showing the answer as it's written</b></td>
+            <td>Doesn't make anything faster — but you see the first words after ~9 seconds
+              instead of staring at a spinner for the whole wait.</td>
+            <td>Feels dramatically better</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note">
+      <span class="tag">An improvement that was deliberately not made</span>
+      <p>
+        The HOA passages also get sent to the model, so shortening those looked like an easy win.
+        But someone measured them first: they were only ~400 tokens, not the ~1,500 everyone
+        assumed. Trimming them would have risked the citations — the most safety-critical thing in
+        the app — to save almost nothing. So it wasn't done. <b>Measure before you optimise.</b>
+      </p>
+    </div>
+  </section>
+
+  <!-- 10 -->
+  <section id="s10">
+    <div class="sec-head"><span class="sec-num">10</span><h2 class="sec-title">How we know it works</h2></div>
+
+    <p>
+      There are <strong>33 tests</strong>, and they all pass. They come in two flavours, and the
+      difference matters.
+    </p>
+
+    <div class="cols c2" style="margin:26px 0">
+      <div class="nd core">
+        <span class="sub">16 tests · fast and free</span>
+        <h5>Testing the plain code</h5>
+        <p>No AI involved. Does 18°F produce "severe"? Does the backup weather source work when
+          the main one fails? Does "I smell gas" trigger the emergency? Does "how do I prevent a
+          burst pipe" <em>not</em>? These run in seconds and cost nothing, so they run constantly.</p>
+      </div>
+      <div class="nd vari">
+        <span class="sub">17 tests · slow and costs money</span>
+        <h5>Testing the whole app</h5>
+        <p>Real questions, real model, end to end. Does it cite a source? Does it refuse when it
+          has none? Does the renter get different rules than the owner? These cost real money to
+          run, so they run before a release.</p>
+      </div>
+    </div>
+
+    <h3>The trick that makes the tests useful</h3>
+
+    <p>
+      A weather test can't check "the answer says 34°F" — the weather changes, and the test would
+      fail tomorrow for no reason. So the tests check <strong>behaviour</strong> instead: did the
+      risk-rating function actually run, and did the answer quote what it returned?
+    </p>
+
+    <p>This turned out to matter more than expected:</p>
+
+    <div class="note">
+      <span class="tag">A test that was wrong, not the code</span>
+      <p>
+        One test insisted the app must call the "look up coordinates" tool. After the speed fix in
+        section 9, that lookup moved <em>inside</em> the bigger tool. The app still did exactly the
+        right thing — but the test failed, reporting a bug that didn't exist.
+      </p>
+      <p>
+        The lesson: <b>test what the app achieved, not how it got there.</b> Otherwise a perfectly
+        safe improvement looks like a breakage, and people start ignoring failing tests — which is
+        far more dangerous than having no tests.
+      </p>
+    </div>
+
+    <p>
+      The test suite has caught three real bugs, including one <em>in itself</em>: the most
+      safety-critical test was failing because the model wrote <code>couldn't</code> with a curly
+      apostrophe and the test was looking for a straight one.
+    </p>
+  </section>
+
+  <!-- 11 -->
+  <section id="s11">
+    <div class="sec-head"><span class="sec-num">11</span><h2 class="sec-title">Where things live in the code</h2></div>
+
+    <p>
+      If you want to go read the real thing, here's the map. Start with the bolded files — they
+      carry most of the ideas on this page.
+    </p>
+
+    <div class="filemap">
+<span class="d">agents/</span>
+  <b>orchestrator.py</b>   <span class="c">← the supervisor. Start here. The instructions, the loop, the safety wiring</span>
+  advisor.py        <span class="c">the "how do I…" specialist, with its three-step thinking</span>
+  cost.py           <span class="c">the bills-and-savings specialist</span>
+  tracing.py        <span class="c">measures how long each step takes</span>
+
+<span class="d">tools/</span>
+  <b>agent_tools.py</b>    <span class="c">← the 13 tools the model can call, and their descriptions</span>
+  <b>safety.py</b>         <span class="c">← the four safety checks from section 8</span>
+  hazard_check.py   <span class="c">the combined weather lookup from section 9</span>
+  freeze_risk.py    <span class="c">the risk table. ~110 lines, no AI. Read this one</span>
+  heat_risk.py      <span class="c">same idea for heat</span>
+  weather.py        <span class="c">forecast, with a backup source if the main one fails</span>
+  savings.py        <span class="c">the dollar arithmetic</span>
+
+<span class="d">memory/</span>
+  <b>rag_store.py</b>      <span class="c">← the three-pass document search from section 6</span>
+  rerank.py         <span class="c">the careful re-read. The pet tiger numbers are in the comments</span>
+  lexical.py        <span class="c">the exact-word search</span>
+  episodic.py       <span class="c">long-term memory</span>
+  semantic_cache.py <span class="c">the "same question, different words" shortcut</span>
+
+<span class="d">api/</span>
+  main.py           <span class="c">the web server and its 26 endpoints</span>
+
+<span class="d">web/</span>            <span class="c">the React front end</span>
+
+<span class="d">eval/</span>
+  cases.py          <span class="c">all 33 tests, readable as a spec of what the app must do</span>
+  results.md        <span class="c">the last run</span>
+</div>
+
+    <div class="note">
+      <span class="tag">Reading tip</span>
+      <p>
+        The comments in this codebase explain <em>why</em>, not what. <code>rerank.py</code> opens
+        with the pet tiger story and the actual measurements. <code>hazard_check.py</code> explains
+        why the combined tool exists. If you're wondering "why is it like this?", the answer is
+        usually in the file's opening comment.
+      </p>
+    </div>
+  </section>
+
+  <!-- 12 -->
+  <section id="s12">
+    <div class="sec-head"><span class="sec-num">12</span><h2 class="sec-title">Run it yourself</h2></div>
+
+    <p>The fastest way to understand it is to watch it work.</p>
+
+    <h3>No setup, no API key</h3>
+    <p>This runs the whole weather pipeline with no account anywhere:</p>
+    <div class="filemap">python main.py --demo
+python main.py --demo --address <span class="c">"Ushuaia, AR"</span>   <span class="c">← somewhere genuinely cold</span>
+python main.py --demo --force-backup       <span class="c">← forces the backup weather source</span></div>
+
+    <h3>The safety checks, on their own</h3>
+    <p>Prints which guardrail each sample message trips. No key needed:</p>
+    <div class="filemap">python -m tools.safety</div>
+
+    <h3>The pet tiger, reproduced</h3>
+    <p>Runs the probe questions and prints the scores from section 6:</p>
+    <div class="filemap">python -m memory.rerank</div>
+
+    <h3>The full app</h3>
+    <p>Two terminals. This needs a key in <code>.env</code>:</p>
+    <div class="filemap">python -m uvicorn api.main:app --port 8000
+cd web &amp;&amp; npm install &amp;&amp; npm run dev      <span class="c">← then open localhost:5173</span></div>
+    <p>
+      On Windows PowerShell, run those as two separate lines in two windows — <code>&amp;&amp;</code>
+      is a syntax error there, and the <code>cd web &amp;&amp; npm run dev</code> form silently never
+      starts.
+    </p>
+    <p>
+      <code>--reload</code> is omitted on purpose. It is convenient while editing Python, but a reload
+      restart wipes the in-memory session tokens, which logs the open browser tab out from under you,
+      and it can leave an orphaned child process still holding port 8000 and still serving the
+      <em>old</em> code. Add it while developing; leave it off when demonstrating.
+    </p>
+    <p>
+      Log in with <code>demo</code> / <code>forecaster</code>. Ask a question and watch the trace
+      panel — you'll see each tool fire live, with its timing. That's the ReAct loop from section 3,
+      visible.
+    </p>
+
+    <p>
+      Then open the <strong>Logs</strong> tab and ask the same question twice. The second time
+      comes back in a fraction of a second, and the log will tell you it was a cache hit.
+    </p>
+
+    <h3>Running it for free</h3>
+    <p>
+      The sidebar has a <strong>Run mode</strong> switch. <em>Full</em> uses the paid model and Google's
+      mapping services; <em>Demo</em> runs the identical system on free and open services only — the free
+      <code>nvidia/nemotron-3-super-120b-a12b:free</code> model, US Census and Open-Meteo for geocoding, Open-Meteo for
+      weather detail, and OpenStreetMap tiles. The free <strong>government</strong> feeds (NWS forecasts
+      and advisories, EIA energy prices, Census/FCC jurisdiction lookup) stay on in both modes, because
+      they cost nothing.
+    </p>
+    <p>
+      Expand <strong>Show services</strong> and every capability lists the provider behind it, tagged
+      <code>gov</code>, <code>free</code>, or <code>billed</code>. In demo mode nothing is
+      <code>billed</code> — you can check that claim on screen rather than take it on faith.
+    </p>
+    <p>
+      Nothing is disabled in demo mode; only the provider changes. It is slower and less reliable at
+      multi-step tool use — roughly 45 s per question instead of 15 s — because the free model is weaker,
+      not because the app is doing less. To start in demo mode (and the only way to select it for the CLI
+      and the evaluation suite, which have no UI), set <code>DEMO_MODE=1</code> before launching, or put
+      it in <code>.env</code>.
+    </p>
+  </section>
+
+  <!-- 13 -->
+  <section id="s13">
+    <div class="sec-head"><span class="sec-num">13</span><h2 class="sec-title">Questions you might have</h2></div>
+
+    <div class="qa">
+      <details>
+        <summary>If the code makes all the real decisions, what is the AI actually for?</summary>
+        <div class="ans">
+          <p>
+            Three things it's genuinely good at. <b>Understanding what you meant</b> — you can
+            phrase a question a thousand ways and it works out which specialist you need.
+            <b>Deciding what to look up</b> — figuring out that "is it safe outside?" requires a
+            weather check. And <b>writing the answer</b> — turning a risk level and a list of
+            actions into something readable by a person standing in their kitchen.
+          </p>
+          <p>
+            What it's <em>not</em> for is judging whether 28°F is cold. Use it where it's strong.
+          </p>
+        </div>
+      </details>
+
+      <details>
+        <summary>Why is it slow? 12 seconds feels like a lot.</summary>
+        <div class="ans">
+          <p>
+            It is a lot, and it's mostly the model — around 88% of the time is spent waiting for
+            it to think and write. The lookups are milliseconds.
+          </p>
+          <p>
+            Which means there's a ceiling on how much faster this can get without changing models.
+            That's why the effort went into <em>fewer trips</em> to the model rather than faster
+            lookups — and why repeat questions are cached down to 0.3 seconds.
+          </p>
+        </div>
+      </details>
+
+      <details>
+        <summary>What happens if the weather service is down?</summary>
+        <div class="ans">
+          <p>
+            Every external service has a backup. The National Weather Service is the first choice
+            because it's the official US source; if it fails, the app falls back to Open-Meteo —
+            and <b>the answer tells you which one it used.</b>
+          </p>
+          <p>
+            If both fail, it says it couldn't get a forecast rather than guessing. For a safety
+            question, half an answer is worse than none.
+          </p>
+        </div>
+      </details>
+
+      <details>
+        <summary>Is my personal data being stored anywhere?</summary>
+        <div class="ans">
+          <p>
+            No, deliberately. There are no user accounts — the login is a fixed demo username and
+            password that stores nothing. The house in the app is a made-up one, and all six
+            documents in the library are synthetic, each labelled as such in the file.
+          </p>
+          <p>
+            If you type something that looks like a social security number or a card number, it's
+            detected, not repeated back, and that whole message is skipped when saving to memory.
+          </p>
+        </div>
+      </details>
+
+      <details>
+        <summary>Could someone trick it into giving dangerous advice?</summary>
+        <div class="ans">
+          <p>
+            Partly, and it's worth being honest about the limits. The safety checks look for
+            patterns of words, so unusual phrasing can slip past them — that's a real gap.
+          </p>
+          <p>
+            But the more important protection isn't the checks at all: <b>the app has no ability to
+            do anything.</b> No sending, no booking, no buying. The worst case is bad text, not a
+            bad action. That's a design choice, not an accident.
+          </p>
+        </div>
+      </details>
+
+      <details>
+        <summary>Why so many different databases? Isn't that over-complicated?</summary>
+        <div class="ans">
+          <p>
+            It's actually two technologies doing four jobs. SQLite (a plain file-based database)
+            holds conversations and the long-term record. Chroma (the vector database) holds
+            anything that needs meaning-based search: the document library, the searchable index of
+            past chats, and the answer cache.
+          </p>
+          <p>
+            They're kept separate because they behave differently — different lifetimes, different
+            deletion rules, and very different consequences when they go wrong. Merging them would
+            be simpler to draw and much harder to reason about.
+          </p>
+        </div>
+      </details>
+
+      <details>
+        <summary>What's the weakest part of this?</summary>
+        <div class="ans">
+          <p>
+            The document library. All the search machinery around it is solid and tested, but it
+            currently contains six made-up documents. So the "can I do this to my house?" feature is
+            a convincing demonstration rather than something you could rely on for your actual home.
+          </p>
+          <p>
+            Fixing it means fetching real municipal codes and HOA documents for a specific address,
+            which brings its own hard problem: showing someone a rule from the wrong city would be
+            worse than showing them nothing. The mechanism to prevent that exists — every document
+            is tagged with where it applies — but the fetching part isn't built.
+          </p>
+        </div>
+      </details>
+
+      <details>
+        <summary>I want to change something. Where do I start?</summary>
+        <div class="ans">
+          <p>
+            <b>Change how risky a temperature is?</b> <code>tools/freeze_risk.py</code> — it's a
+            table near the top. <b>Add a document to the library?</b> Drop a Markdown file in
+            <code>data/corpus/</code> and run <code>python ingest.py</code>. <b>Add a new safety
+            rule?</b> <code>tools/safety.py</code> — but add a test for it, and check it doesn't
+            fire on normal questions. <b>Add a new tool?</b> <code>tools/agent_tools.py</code> — and
+            write the description carefully, because that text is the <em>only</em> thing the model
+            sees when deciding whether to use it.
+          </p>
+          <p>
+            Whatever you change, run <code>python eval/run_eval.py --tools-only</code> afterwards.
+            It's free and takes seconds.
+          </p>
+        </div>
+      </details>
+    </div>
+
+    <hr class="rule">
+
+    <h3>If you remember one thing</h3>
+    <p>
+      The model routes, retrieves, and explains — <strong>it does not decide.</strong> Every risk
+      level, every dollar figure, and every emergency response comes from plain code that runs the
+      same way every time. That single constraint is why the app can be tested properly, why its
+      numbers can be checked, and why it's safe enough to answer someone standing in their house at
+      2 a.m. wondering if their pipes are about to burst.
+    </p>
+  </section>
+
+  </main>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  document.querySelectorAll(".dg").forEach(function (dg) {
+    var nodes = Array.prototype.slice.call(dg.querySelectorAll(".nd[data-id]"));
+    if (nodes.length < 2) return;
+    var linkMap = {};
+    nodes.forEach(function (n) {
+      var id = n.dataset.id;
+      linkMap[id] = linkMap[id] || {};
+      (n.dataset.links || "").split(/\s+/).forEach(function (o) {
+        if (!o) return;
+        linkMap[id][o] = true;
+        linkMap[o] = linkMap[o] || {};
+        linkMap[o][id] = true;
+      });
+    });
+    function focus(node) {
+      var lit = linkMap[node.dataset.id] || {};
+      dg.classList.add("focusing");
+      nodes.forEach(function (m) {
+        m.classList.toggle("lit", m.dataset.id === node.dataset.id || lit[m.dataset.id] === true);
+      });
+    }
+    function clear() {
+      dg.classList.remove("focusing");
+      nodes.forEach(function (m) { m.classList.remove("lit"); });
+    }
+    nodes.forEach(function (n) {
+      n.tabIndex = 0;
+      n.addEventListener("mouseenter", function () { focus(n); });
+      n.addEventListener("mouseleave", clear);
+      n.addEventListener("focus", function () { focus(n); });
+      n.addEventListener("blur", clear);
+    });
+    dg.addEventListener("mouseleave", clear);
+  });
+
+  var links = {};
+  document.querySelectorAll(".toc a").forEach(function (a) { links[a.getAttribute("href").slice(1)] = a; });
+  if ("IntersectionObserver" in window) {
+    var seen = new Set();
+    var obs = new IntersectionObserver(function (es) {
+      es.forEach(function (e) { if (e.isIntersecting) seen.add(e.target.id); else seen.delete(e.target.id); });
+      Object.keys(links).forEach(function (id) {
+        links[id].style.color = seen.has(id) ? "var(--accent)" : "";
+        links[id].style.fontWeight = seen.has(id) ? "650" : "";
+      });
+    }, { rootMargin: "-10% 0px -70% 0px" });
+    document.querySelectorAll("section[id]").forEach(function (s) { obs.observe(s); });
+  }
+})();
+</script>

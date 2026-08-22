@@ -1,0 +1,11 @@
+home_id,utility_id,service,provider_name,type,service_area,rate,rate_unit,fixed_monthly_usd,phone,outage_phone,website_note
+demo-001,u001,electric,Bluebonnet Grid Delivery (fictional),delivery (TDU),Dallas metro TX,5.20,cents per kWh delivery,4.25,555-0200,555-0201,deregulated market: retail provider chosen separately
+demo-001,u002,electric,Sample Retail Power Co. (fictional),retail provider,Texas (deregulated),11.20,cents per kWh energy,9.95,555-0210,555-0201,synthetic retail electric provider (REP)
+demo-001,u003,electric,Lone Star Green Energy (fictional),retail provider,Texas (deregulated),12.60,cents per kWh energy,0.00,555-0212,555-0201,synthetic REP; 100% renewable plan
+demo-001,u004,gas,Trinity Gas Co. (fictional),regulated utility,Dallas metro TX,9.85,dollars per Mcf,21.50,555-0220,555-0221,synthetic rate for demo
+demo-001,u005,water,Dallas Municipal Water (synthetic stand-in),municipal,City of Dallas TX,4.10,dollars per 1000 gal,8.60,555-0230,555-0231,tiered rate; synthetic values
+demo-001,u006,trash,Dallas Municipal Sanitation (synthetic stand-in),municipal,City of Dallas TX,0.00,flat,36.00,555-0240,555-0241,flat monthly fee
+demo-002,u101,electric,North Star Power (fictional),regulated investor-owned,Twin Cities metro MN,13.80,cents per kWh,9.50,555-0300,555-0301,regulated market: one provider sets the all-in rate
+demo-002,u102,gas,Twin Rivers Gas (fictional),regulated investor-owned,Twin Cities metro MN,0.92,dollars per therm,11.00,555-0302,555-0303,winter heating is the dominant annual cost at this home
+demo-002,u103,water,City of Minneapolis Water (synthetic stand-in),municipal,Minneapolis MN,4.10,dollars per 1000 gal,8.75,555-0304,,"municipal billing, quarterly"
+demo-002,u104,trash,Lakeshore Sanitation (fictional),contracted hauler,Minneapolis MN,0,flat monthly,28.00,555-0305,,cart size determines the monthly rate

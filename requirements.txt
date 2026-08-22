@@ -1,0 +1,36 @@
+# --- Phase 1: Forecaster core (needed now) ---
+requests>=2.31
+python-dotenv>=1.0
+# Makes Python trust the Windows/OS certificate store. Needed on networks that
+# inspect TLS (corporate proxy / antivirus HTTPS scanning); harmless otherwise.
+# If API calls fail with "unable to get local issuer certificate", this fixes it.
+pip-system-certs>=4.0
+langgraph>=0.2.40
+langchain>=0.3
+langchain-core>=0.3
+langchain-openai>=0.2        # used as an OpenAI-compatible client for OpenRouter
+
+# --- Phase 2: RAG / memory + UI ---
+chromadb>=0.5           # vector store; ships a built-in MiniLM embedder (no key)
+streamlit>=1.36         # demo UI (streamlit run app.py)
+
+# Hybrid retrieval + cross-encoder reranking (memory/lexical.py, memory/rerank.py).
+# These three already arrive as chromadb dependencies, but are listed explicitly
+# because this project now imports them directly. NOTE: this is deliberately NOT
+# sentence-transformers — the reranker runs the ONNX model on onnxruntime so the
+# project does not pull in PyTorch (~2 GB) and stays clonable. BM25 is implemented
+# in-repo for the same reason, so there is no new dependency at all here.
+onnxruntime>=1.17       # runs the reranking cross-encoder
+tokenizers>=0.15        # tokenizer for the same
+numpy>=1.26             # tensor plumbing for the ONNX session
+
+# --- Phase 3: Advisor (Tree-of-Thought) ---
+ddgs>=6.0               # DuckDuckGo web search for the Advisor (no key)
+
+# --- Web app backend (React front-end lives in web/) ---
+fastapi>=0.110
+uvicorn[standard]>=0.29
+langgraph-checkpoint-sqlite>=2.0   # persistent conversation memory
+
+# --- Later phases ---
+# pypdf>=5.0            # if you add real PDF documents to the corpus

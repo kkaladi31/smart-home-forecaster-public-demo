@@ -1,0 +1,31 @@
+home_id,contractor_id,name,trade,rating,reviews,hourly_rate_usd,min_job_usd,availability,service_area,licensed,phone,license_number,license_status,license_expires,license_type,specialty,ubi,bond_amount
+demo-001,c001,Lone Star Handyman Co.,handyman,4.7,312,65,95,within 2 days,Dallas metro,yes,555-0142,DEMO-CR-1001,ACTIVE,2027-05-14,CONSTRUCTION CONTRACTOR,HANDYMAN,999100101,12000
+demo-001,c002,BluePeak Plumbing,plumber,4.8,540,120,150,same day (emergency),Dallas metro,yes,555-0170,DEMO-CR-1002,ACTIVE,2027-11-02,PLUMBING CONTRACTOR,JOURNEY LEVEL,999100102,12000
+demo-001,c003,Sunbelt Heating & Air,hvac,4.6,410,110,140,within 3 days,Dallas metro,yes,555-0188,DEMO-CR-1003,ACTIVE,2028-01-20,CONSTRUCTION CONTRACTOR,HVAC/RFRG,999100103,12000
+demo-001,c004,Cardinal Electric,electrician,4.9,275,125,160,within 2 days,Dallas metro,yes,555-0155,DEMO-CR-1004,ACTIVE,2027-03-30,ELECTRICAL CONTRACTOR,JOURNEY LEVEL,999100104,12000
+demo-001,c005,Maple Grove Handyworks,handyman,4.4,88,55,80,next day,North Dallas,no,555-0111,DEMO-CR-1005,EXPIRED,2025-02-11,CONSTRUCTION CONTRACTOR,HANDYMAN,999100105,0
+demo-001,c006,Rivera General Contracting,general_contractor,4.7,190,95,500,within 1 week,Dallas metro,yes,555-0133,DEMO-CR-1006,ACTIVE,2027-08-08,CONSTRUCTION CONTRACTOR,GENERAL,999100106,12000
+demo-001,c007,GreenScape Yards,landscaper,4.5,231,60,120,within 4 days,Dallas metro,yes,555-0166,DEMO-CR-1007,ACTIVE,2027-06-19,CONSTRUCTION CONTRACTOR,LANDSCAPING,999100107,6000
+demo-001,c008,Precision Painting LLC,painter,4.6,158,55,200,within 5 days,Dallas metro,yes,555-0177,DEMO-CR-1008,ACTIVE,2027-09-25,CONSTRUCTION CONTRACTOR,PAINTING/WALLCOVERING,999100108,6000
+demo-001,c009,ClearWater Pool Builders,pool_contractor,4.8,97,130,2500,within 3 weeks,Dallas metro,yes,555-0199,DEMO-CR-1009,ACTIVE,2027-04-17,CONSTRUCTION CONTRACTOR,GENERAL,999100109,12000
+demo-001,c010,Anchor Mounting Pros,handyman,4.9,64,70,90,next day,Central Dallas,yes,555-0121,DEMO-CR-1010,ACTIVE,2027-12-01,CONSTRUCTION CONTRACTOR,HANDYMAN,999100110,12000
+demo-001,c011,Frontier Fencing,fencing,4.3,142,60,300,within 1 week,Dallas metro,yes,555-0144,DEMO-CR-1011,ACTIVE,2027-07-22,CONSTRUCTION CONTRACTOR,FENCING,999100111,6000
+demo-001,c012,ReliaTech Appliance Repair,appliance_repair,4.5,203,90,110,within 2 days,Dallas metro,yes,555-0160,DEMO-CR-1012,ACTIVE,2027-10-05,CONSTRUCTION CONTRACTOR,GENERAL,999100112,6000
+demo-001,c013,Skyline Roofworks,roofing,4.9,411,140,600,within 2 weeks,Dallas metro,no,555-0102,DEMO-CR-1013,SUSPENDED,2027-01-09,CONSTRUCTION CONTRACTOR,ROOFING,999100113,0
+demo-002,c101,Larkspur Handyman Services,handyman,4.8,212,95,150,2-4 days,Minneapolis / Hennepin County MN,yes,555-0400,DEMO-CR-2001,ACTIVE,2027-09-30,CONSTRUCTION CONTRACTOR,HANDYMAN,999200101,12000
+demo-002,c102,Northline Plumbing,plumber,4.7,318,145,200,next day,Minneapolis / Hennepin County MN,yes,555-0401,DEMO-CR-2002,ACTIVE,2028-02-14,PLUMBING CONTRACTOR,JOURNEY LEVEL,999200102,12000
+demo-002,c103,Winterhaven Heating & Cooling,hvac,4.9,401,155,180,same week,Minneapolis / Hennepin County MN,yes,555-0402,DEMO-CR-2003,ACTIVE,2027-11-11,CONSTRUCTION CONTRACTOR,Heating/Vent/Air-Conditioning and Refrig (HVAC/R) ,999200103,12000
+demo-002,c104,Birchwood Electric,electrician,4.6,174,165,220,3-5 days,Minneapolis / Hennepin County MN,yes,555-0403,DEMO-CR-2004,ACTIVE,2027-05-27,ELECTRICAL CONTRACTOR,JOURNEY LEVEL,999200104,12000
+demo-002,c105,Summit Ridge Roofing,roofing,4.5,260,135,450,1-2 weeks,Minneapolis / Hennepin County MN,yes,555-0404,DEMO-CR-2005,ACTIVE,2027-08-19,CONSTRUCTION CONTRACTOR,ROOFING,999200105,12000
+demo-002,c106,ClearFlow Gutter Care,gutter_cleaning,4.7,149,85,140,2-3 days,Minneapolis / Hennepin County MN,yes,555-0405,DEMO-CR-2006,ACTIVE,2027-06-06,CONSTRUCTION CONTRACTOR,GENERAL,999200106,6000
+demo-002,c107,Basement Guard Drainage,drainage,4.8,203,150,400,1 week,Minneapolis / Hennepin County MN,yes,555-0406,DEMO-CR-2007,ACTIVE,2027-10-28,CONSTRUCTION CONTRACTOR,"Excavation, Grading and Land Clearing",999200107,12000
+demo-002,c108,Ironwood Tree Service,tree_service,4.6,187,140,250,1-2 weeks,Minneapolis / Hennepin County MN,yes,555-0407,DEMO-CR-2008,ACTIVE,2027-07-15,CONSTRUCTION CONTRACTOR,Tree Removal Service,999200108,6000
+demo-002,c109,Cedar Peak General Contracting,general_contractor,4.4,96,125,800,3-4 weeks,Minneapolis / Hennepin County MN,yes,555-0408,DEMO-CR-2009,ACTIVE,2027-12-12,CONSTRUCTION CONTRACTOR,GENERAL,999200109,12000
+demo-002,c110,Prairie Green Landscaping,landscaper,4.5,221,80,150,1 week,Minneapolis / Hennepin County MN,yes,555-0409,DEMO-CR-2010,ACTIVE,2027-04-04,CONSTRUCTION CONTRACTOR,LANDSCAPING,999200110,6000
+demo-002,c111,Lakeside Painting Co.,painter,4.7,133,78,300,2 weeks,Minneapolis / Hennepin County MN,yes,555-0410,DEMO-CR-2011,ACTIVE,2027-03-03,CONSTRUCTION CONTRACTOR,PAINTING/WALLCOVERING,999200111,6000
+demo-002,c112,Northgate Fencing,fencing,4.3,88,98,500,2-3 weeks,Minneapolis / Hennepin County MN,yes,555-0411,DEMO-CR-2012,ACTIVE,2027-02-20,CONSTRUCTION CONTRACTOR,FENCING,999200112,6000
+demo-002,c113,Twin Cities Appliance Repair,appliance_repair,4.6,305,110,120,next day,Minneapolis / Hennepin County MN,yes,555-0412,DEMO-CR-2013,ACTIVE,2027-01-31,CONSTRUCTION CONTRACTOR,GENERAL,999200113,6000
+demo-002,c114,Standby Power Solutions,generator,4.8,74,170,1200,3 weeks,Minneapolis / Hennepin County MN,yes,555-0413,DEMO-CR-2014,ACTIVE,2027-05-05,ELECTRICAL CONTRACTOR,JOURNEY LEVEL,999200114,12000
+demo-002,c115,Frostline Roofing & Gutters,roofing,4.9,502,128,400,3-5 days,Minneapolis / Hennepin County MN,no,555-0414,DEMO-CR-2015,EXPIRED,2025-11-30,CONSTRUCTION CONTRACTOR,ROOFING,999200115,0
+demo-002,c116,Kettle River Plumbing,plumber,4.9,388,138,190,same day,Minneapolis / Hennepin County MN,no,555-0415,DEMO-CR-2016,ACTIVE,2026-06-30,PLUMBING CONTRACTOR,JOURNEY LEVEL,999200116,12000
+demo-002,c117,Boulder Ridge Exteriors,roofing,4.2,61,115,380,2 weeks,Minneapolis / Hennepin County MN,no,555-0416,DEMO-CR-2017,OUT OF BUSINESS,2026-03-15,CONSTRUCTION CONTRACTOR,ROOFING,999200117,0

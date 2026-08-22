@@ -1,0 +1,33 @@
+# Secrets — never commit
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+*.egg-info/
+
+# Generated state: vector store, episodic SQLite, conversation checkpoints.
+# One tree per build profile (state/demo, state/full). All of it is rebuilt by
+# `python ingest.py`, and none of it should ever be committed — the full-profile
+# tree in particular holds embeddings of real documents.
+state/
+
+# Reranker weights — downloaded on first use, ~23 MB, not ours to redistribute
+memory/models/
+
+# Fetched pages, builder plan originals, bulk parcel extracts
+.cache/
+
+# Web front-end
+web/node_modules/
+web/dist/
+web/.vite/
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

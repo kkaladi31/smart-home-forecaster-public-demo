@@ -1,0 +1,63 @@
+{
+  "_comment": "SECONDARY home. Fully SYNTHETIC sample home for the capstone demo — the address itself is invented. No real personal data. The builder name is invented, as are all specs and the floor plan. Nothing here describes a real property or a real company.",
+  "home_id": "demo-001",
+  "label": "Dallas, TX",
+  "is_primary": false,
+  "persona": "owner",
+  "address": "5000 Maple Street, Dallas, TX 75201",
+  "jurisdiction": {
+    "city": "Dallas",
+    "county": "Dallas County",
+    "state": "TX",
+    "timezone": "America/Chicago",
+    "building_department": "City of Dallas building department (synthetic stand-in)"
+  },
+  "dwelling_type": "single_family",
+  "year_built": 2015,
+  "builder": "Larkfield Residential (fictional)",
+  "model_name": "Express Series (illustrative)",
+  "square_feet": 2200,
+  "stories": 2,
+  "bedrooms": 4,
+  "bathrooms": 2.5,
+  "lot_size_acres": 0.18,
+  "climate_zone": "IECC 3A (mixed-humid)",
+  "wall_construction": "wood-framed drywall interior, brick veneer exterior",
+  "estimated_value_usd": 415000,
+  "estimated_rent_usd_month": 2600,
+  "floor_plan_image": "floorplans/demo-001_synthetic.svg",
+  "hoa": {
+    "has_hoa": true,
+    "association_name": "Maple Grove HOA (synthetic)",
+    "governing_docs": ["maple_grove_ccrs.md", "short_term_rental_policy.md"]
+  },
+  "systems": {
+    "hvac": {
+      "type": "central gas furnace + electric AC",
+      "manufacturer": "Carrier (illustrative)",
+      "model": "59TP6 (illustrative)",
+      "filter_size": "16x25x1",
+      "filter_last_changed": "2026-05-01",
+      "filter_interval_days": 90
+    },
+    "water_heater": {"type": "tank", "fuel": "natural gas", "capacity_gal": 50, "installed": "2015-06-01", "thermostat_f": 120}
+  },
+  "exposed_plumbing": {
+    "outdoor_spigots": 2,
+    "has_shutoff_valve_for_spigots": true,
+    "pipes_in_unheated_spaces": ["garage", "attic"]
+  },
+  "appliances": [
+    {"type": "refrigerator", "brand": "Whirlpool (illustrative)", "installed": "2015-06-01", "water_filter_interval_days": 180},
+    {"type": "dishwasher", "brand": "Bosch (illustrative)", "installed": "2015-06-01"},
+    {"type": "clothes_washer", "brand": "LG (illustrative)", "installed": "2018-03-15", "config": "front-load"},
+    {"type": "clothes_dryer", "brand": "LG (illustrative)", "installed": "2018-03-15", "fuel": "electric"},
+    {"type": "range", "brand": "GE (illustrative)", "installed": "2015-06-01", "fuel": "gas"}
+  ],
+  "utilities": {
+    "electric": "Oncor (delivery) / synthetic retail provider",
+    "gas": "Atmos Energy (illustrative)",
+    "water": "Dallas Water Utilities (illustrative)"
+  },
+  "notes": "Freeze-prone winters with occasional Arctic cold fronts, and long, dangerously hot summers. Deregulated retail electricity market, so the address determines the delivery utility but not the rate."
+}

@@ -1,0 +1,180 @@
+@import "tailwindcss";
+
+/* Design tokens.
+   Chart colours come from the validated data-viz palette: categorical slots 1
+   and 2 for the two temperature series, and the fixed status palette for risk
+   levels. Both light and dark steps were validated against their own surface —
+   the dark values are selected steps, not an automatic flip of the light ones. */
+:root {
+  color-scheme: light;
+  --surface-1: #fcfcfb;      /* card / chart surface */
+  --surface-page: #f9f9f7;   /* page plane */
+  --text-primary: #0b0b0b;
+  --text-secondary: #52514e;
+  --text-muted: #898781;
+  --gridline: #e1e0d9;
+  --baseline: #c3c2b7;
+  --border: rgba(11, 11, 11, 0.10);
+
+  --series-1: #2a78d6;       /* actual temperature */
+  --series-2: #eb6834;       /* feels like */
+
+  --status-good: #0ca30c;
+  --status-warning: #fab219;
+  --status-serious: #ec835a;
+  --status-critical: #d03b3b;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) {
+    color-scheme: dark;
+    --surface-1: #1a1a19;
+    --surface-page: #0d0d0d;
+    --text-primary: #ffffff;
+    --text-secondary: #c3c2b7;
+    --text-muted: #898781;
+    --gridline: #2c2c2a;
+    --baseline: #383835;
+    --border: rgba(255, 255, 255, 0.10);
+    --series-1: #3987e5;
+    --series-2: #d95926;
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --surface-1: #1a1a19;
+  --surface-page: #0d0d0d;
+  --text-primary: #ffffff;
+  --text-secondary: #c3c2b7;
+  --text-muted: #898781;
+  --gridline: #2c2c2a;
+  --baseline: #383835;
+  --border: rgba(255, 255, 255, 0.10);
+  --series-1: #3987e5;
+  --series-2: #d95926;
+}
+
+html, body, #root { height: 100%; }
+
+body {
+  margin: 0;
+  background: var(--surface-page);
+  color: var(--text-primary);
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.card {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.muted { color: var(--text-muted); }
+.secondary { color: var(--text-secondary); }
+
+/* Tabular figures only where columns must align (axis ticks, table rows). */
+.tabular { font-variant-numeric: tabular-nums; }
+
+/* Leaflet needs an explicit height and should match the surrounding radius. */
+.leaflet-container {
+  height: 100%;
+  width: 100%;
+  border-radius: 10px;
+  background: var(--surface-page);
+}
+
+.scroll-thin { scrollbar-width: thin; scrollbar-color: var(--baseline) transparent; }
+.scroll-thin::-webkit-scrollbar { width: 8px; height: 8px; }
+.scroll-thin::-webkit-scrollbar-thumb { background: var(--baseline); border-radius: 4px; }
+
+@keyframes pulse-dot { 0%, 100% { opacity: 1 } 50% { opacity: 0.35 } }
+.pulse { animation: pulse-dot 1.2s ease-in-out infinite; }
+
+/* --- rendered agent answers -------------------------------------------------
+   Markdown from the model, styled to read as an answer rather than as a
+   document: tight vertical rhythm, clear hierarchy, and tables that scroll
+   inside their own box instead of widening the chat column. */
+.md { line-height: 1.55; }
+.md > :first-child { margin-top: 0; }
+.md > :last-child { margin-bottom: 0; }
+
+.md p { margin: 0 0 0.6rem; }
+.md strong { font-weight: 650; color: var(--text-primary); }
+.md em { font-style: italic; }
+
+.md h1, .md h2, .md h3, .md h4 {
+  font-weight: 650;
+  line-height: 1.3;
+  margin: 1rem 0 0.4rem;
+  color: var(--text-primary);
+}
+.md h1 { font-size: 1.05rem; }
+.md h2 { font-size: 1rem; }
+.md h3, .md h4 { font-size: 0.9rem; }
+.md h1:first-child, .md h2:first-child, .md h3:first-child { margin-top: 0; }
+
+.md ul, .md ol { margin: 0 0 0.6rem; padding-left: 1.15rem; }
+.md ul { list-style: disc; }
+.md ol { list-style: decimal; }
+.md li { margin: 0.2rem 0; }
+.md li::marker { color: var(--text-muted); }
+.md li > p { margin: 0; }
+.md ul ul, .md ol ol, .md ul ol, .md ol ul { margin-bottom: 0; }
+
+.md blockquote {
+  margin: 0 0 0.6rem;
+  padding: 0.1rem 0 0.1rem 0.7rem;
+  border-left: 3px solid var(--series-1);
+  color: var(--text-secondary);
+}
+
+.md code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85em;
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+  background: var(--surface-page);
+  border: 1px solid var(--border);
+}
+.md pre {
+  margin: 0 0 0.6rem;
+  padding: 0.6rem 0.7rem;
+  border-radius: 8px;
+  overflow-x: auto;
+  background: var(--surface-page);
+  border: 1px solid var(--border);
+}
+.md pre code { padding: 0; border: 0; background: none; font-size: 0.8rem; }
+
+.md hr { margin: 0.9rem 0; border: 0; border-top: 1px solid var(--border); }
+
+.md-table-wrap {
+  margin: 0 0 0.7rem;
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.md table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+.md thead { background: var(--surface-page); }
+.md th {
+  text-align: left;
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--text-secondary);
+}
+.md th, .md td {
+  padding: 0.4rem 0.6rem;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+.md tbody tr:last-child td { border-bottom: 0; }
+/* Step/number columns stay narrow so the content column gets the room. */
+.md td:first-child { white-space: nowrap; }
+.md table td:first-child:has(+ td) { width: 1%; }
+
+/* Inside a user's own (blue) bubble the answer text is white — keep links and
+   emphasis legible there too. */
+.md-invert, .md-invert strong, .md-invert th { color: #fff; }
+.md-invert a { color: #fff; text-decoration: underline; }
