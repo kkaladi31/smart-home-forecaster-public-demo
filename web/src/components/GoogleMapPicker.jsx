@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { normalizeLatLon } from '../utils/geo'
 // v2 of the loader removed the `Loader` class in favour of this functional API.
 import { importLibrary, setOptions } from '@googlemaps/js-api-loader'
 
@@ -15,12 +16,13 @@ const RADAR_INDEX = 'https://api.rainviewer.com/public/weather-maps.json'
  * bundle. It still reaches the browser (unavoidable for the Maps JS API), so the
  * key must carry an HTTP-referrer restriction in the Google Cloud console.
  */
-export default function GoogleMapPicker({ lat, lon, apiKey, onPick }) {
+export default function GoogleMapPicker({ lat, lon, apiKey, onPick, canPick }) {
   const containerRef = useRef(null)
   const mapRef = useRef(null)
   const markerRef = useRef(null)
   const radarRef = useRef(null)
   const onPickRef = useRef(onPick)
+  const canPickRef = useRef(canPick)
 
   const [showRadar, setShowRadar] = useState(true)
   const [mapType, setMapType] = useState('roadmap')
@@ -30,6 +32,7 @@ export default function GoogleMapPicker({ lat, lon, apiKey, onPick }) {
 
   // Keep the latest click handler without re-creating the map.
   useEffect(() => { onPickRef.current = onPick }, [onPick])
+  useEffect(() => { canPickRef.current = canPick }, [canPick])
 
   // Latest radar frame.
   useEffect(() => {
@@ -63,7 +66,11 @@ export default function GoogleMapPicker({ lat, lon, apiKey, onPick }) {
           clickableIcons: false,
         })
         map.addListener('click', (e) => {
-          if (e.latLng) onPickRef.current?.({ lat: e.latLng.lat(), lon: e.latLng.lng() })
+          // Same two rules as the Leaflet picker: only when picking is
+          // enabled, and only after normalising. Google keeps world copies too.
+          if (!canPickRef.current || !e.latLng) return
+          const point = normalizeLatLon(e.latLng.lat(), e.latLng.lng())
+          if (point) onPickRef.current?.(point)
         })
         mapRef.current = map
         setReady(true)

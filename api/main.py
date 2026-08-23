@@ -96,13 +96,21 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Smart-Home Forecaster API", version="1.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
-    # The browser now calls this API directly rather than through Vite's proxy
-    # (see web/src/api.js), so both the dev server and the preview server need to
-    # be allowed origins.
-    allow_origins=[
-        "http://localhost:5173", "http://127.0.0.1:5173",
-        "http://localhost:4173", "http://127.0.0.1:4173",
-    ],
+    # The browser calls this API directly rather than through Vite's proxy (see
+    # web/src/api.js), so the front end's origin has to be allowed here.
+    #
+    # Matched by PATTERN rather than by a list of four literal ports. The list
+    # named 5173 and 4173, which was fine until two builds ran side by side: the
+    # second UI came up on 5174, its preflight was answered `400 Bad Request`,
+    # and the only symptom the user sees is "I cannot log in" — the password
+    # looks wrong when the request never reached the endpoint at all. Vite also
+    # walks to the next free port on its own whenever one is busy, so the same
+    # failure was always reachable without anyone choosing a second port.
+    #
+    # Still strictly local: loopback hosts only, any port. Not a wildcard —
+    # `allow_credentials=True` with `*` is refused by browsers anyway, and this
+    # server holds session tokens.
+    allow_origin_regex=r"^http://(localhost|127\.0\.0\.1)(:\d+)?$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -482,6 +490,23 @@ def weather(
     visibility, moon phase, yesterday comparison, running conditions).
     """
     from tools.weather_detail import get_weather_detail
+
+    # Normalised at the boundary, because a map is not the only thing that can
+    # produce an impossible coordinate and the failure was ugly: a click near the
+    # date line arrives as longitude -267.43 (map panels keep "world copies"),
+    # Open-Meteo answers 400, and the dashboard renders the raw provider URL at
+    # the user. The clients normalise too — this is the backstop, so no caller
+    # can reach a provider with a coordinate that does not exist.
+    #
+    # Longitude WRAPS because it is cyclic; latitude CLAMPS because it is not.
+    if lon is not None:
+        lon = ((lon + 180.0) % 360.0 + 360.0) % 360.0 - 180.0
+    if lat is not None:
+        if not -90.0 <= lat <= 90.0:
+            raise HTTPException(
+                status_code=400,
+                detail=f"latitude {lat} is outside the range -90 to 90",
+            )
 
     label = None
     if lat is None or lon is None:

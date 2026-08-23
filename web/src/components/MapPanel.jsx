@@ -9,9 +9,9 @@ import MapPicker from './MapPicker'
  * which needs no key and no billing account — so the project stays runnable by
  * anyone who clones the repo. Both carry the same RainViewer radar overlay.
  */
-export default function MapPanel({ lat, lon, apiKey, onPick }) {
+export default function MapPanel({ lat, lon, apiKey, onPick, canPick }) {
   if (apiKey) {
-    return <GoogleMapPicker lat={lat} lon={lon} apiKey={apiKey} onPick={onPick} />
+    return <GoogleMapPicker lat={lat} lon={lon} apiKey={apiKey} onPick={onPick} canPick={canPick} />
   }
-  return <MapPicker lat={lat} lon={lon} onPick={onPick} />
+  return <MapPicker lat={lat} lon={lon} onPick={onPick} canPick={canPick} />
 }

@@ -14,6 +14,7 @@ import requests
 
 from config import HTTP_TIMEOUT, USER_AGENT
 from tools.cache import TTL_ALERTS, cached
+from tools.home_precautions import precautions_for
 from tools.http import SESSION
 
 NWS_ALERTS_URL ="https://api.weather.gov/alerts/active"
@@ -57,6 +58,11 @@ def get_weather_alerts(latitude: float, longitude: float) -> dict:
                 "instruction": instruction[:400],
                 "expires": p.get("expires", ""),
                 "area": p.get("areaDesc", ""),
+                # What the advisory means for the BUILDING. The NWS instruction
+                # tells people how to stay safe and stops there; protecting the
+                # house is this product's job, so it is attached here rather than
+                # in the UI — the agent reads the same field.
+                "home_actions": precautions_for(p.get("event", ""))["actions"],
             }
         )
     alerts.sort(key=lambda a: _SEVERITY_RANK.get(a["severity"], 4))

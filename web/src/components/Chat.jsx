@@ -34,7 +34,8 @@ const TOOL_LABELS = {
 }
 
 export default function Chat({
-  persona, threadId, homeId, location, onNewThread, onResumeThread, onBusyChange,
+  persona, threadId, homeId, location, prefill, onPrefillConsumed,
+  onNewThread, onResumeThread, onBusyChange,
 }) {
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
@@ -46,8 +47,24 @@ export default function Chat({
   const [showMenu, setShowMenu] = useState(false)
   const abortRef = useRef(null)
   const endRef = useRef(null)
+  const inputRef = useRef(null)
+
   const resumingRef = useRef(false)
   const startedRef = useRef(0)
+
+  // A hazard notification can hand a question over. It is placed in the box and
+  // FOCUSED, never sent: the notification decided something is worth asking
+  // about, but only the person decides to ask. Auto-sending would also fire a
+  // model call from a component whose whole point is that it costs nothing.
+  //
+  // Refused while a turn is in flight — overwriting the box mid-answer would
+  // destroy whatever the user was typing next.
+  useEffect(() => {
+    if (!prefill || busy) return
+    setInput(prefill)
+    inputRef.current?.focus()
+    onPrefillConsumed?.()
+  }, [prefill, busy, onPrefillConsumed])
 
   // The running timer. Answers take tens of seconds, and a spinner with no
   // number reads as "stuck"; a moving clock reads as "working". 100ms keeps the
@@ -335,6 +352,7 @@ export default function Chat({
       <div className="p-3" style={{ borderTop: '1px solid var(--border)' }}>
         <form onSubmit={(e) => { e.preventDefault(); send() }} className="flex gap-2">
           <input
+            ref={inputRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="Ask about weather risk, HOA rules, repairs, bills…"

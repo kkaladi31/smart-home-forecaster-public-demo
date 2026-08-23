@@ -147,13 +147,13 @@ function ModeBadge({ demo }) {
     <span
       className="ml-2 align-middle px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide"
       title={demo
-        ? 'Demo mode — free and open services only'
-        : 'Full mode — includes metered services'}
+        ? 'Free providers — open services only; the data plane is unchanged'
+        : 'Metered providers — paid model and Google services'}
       style={demo
         ? { background: 'var(--status-good)', color: '#fff' }
         : { border: '1px solid var(--border)', color: 'var(--text-secondary)' }}
     >
-      {demo ? 'Demo' : 'Full'}
+      {demo ? 'Free' : 'Metered'}
     </span>
   )
 }
@@ -187,14 +187,21 @@ function ModeCard({ mode, busy, onMode }) {
   return (
     <div className="card p-4">
       <h2 className="text-sm font-semibold mb-2">
-        {mode.switchable ? 'Run mode' : 'Services'}
+        {mode.switchable ? 'Providers' : 'Services'}
       </h2>
 
       {mode.switchable && (
         <div className="flex rounded-lg overflow-hidden" style={{ border: '1px solid var(--border)' }}>
           {[
-            { demo: false, label: 'Full', hint: 'Best quality — uses metered services' },
-            { demo: true, label: 'Demo', hint: 'Free and open services only' },
+            // Named for what they actually change. These used to read
+            // "Full"/"Demo", which promised more than the switch delivers: it
+            // selects the MODEL AND PROVIDERS, while the data plane — which
+            // homes exist, which documents are searchable — is fixed at import
+            // by SHF_PROFILE and cannot move at runtime. Someone reasonably
+            // expected "Demo" here to show the demo homes, and it does not.
+            // Two switches, two names.
+            { demo: false, label: 'Metered', hint: 'Best quality — paid model and Google services' },
+            { demo: true, label: 'Free', hint: 'Free and open services only — same homes and documents' },
           ].map((opt) => (
             <button
               key={opt.label}

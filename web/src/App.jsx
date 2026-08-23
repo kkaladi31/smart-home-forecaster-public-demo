@@ -6,6 +6,7 @@ import {
 import { log } from './logbus'
 import Login from './components/Login'
 import Sidebar from './components/Sidebar'
+import HazardAlert from './components/HazardAlert'
 import LocationBar from './components/LocationBar'
 import MapPanel from './components/MapPanel'
 import MetricTiles from './components/MetricTiles'
@@ -44,6 +45,22 @@ export default function App() {
   const [chatBusy, setChatBusy] = useState(false)
   const [chatElapsed, setChatElapsed] = useState(0)
   const chatStartedRef = useRef(0)
+  // Set by a hazard notification's "Ask the assistant" button. The chat consumes
+  // it into its input rather than sending it, so the user still chooses to ask.
+  const [chatPrefill, setChatPrefill] = useState('')
+
+  // Looking somewhere OTHER than the active home is deliberately opt-in.
+  //
+  // The dashboard and the policy answers are two halves of one screen, and only
+  // one of them follows this toggle: retrieval stays bound to the active home no
+  // matter where the map is pointed. Letting a stray map click silently repoint
+  // the weather would put a forecast for one place beside covenants for another,
+  // with nothing on screen admitting it — which is R7 (assesses the wrong
+  // property) arriving through the UI instead of through the geocoder.
+  //
+  // Applies to owners and renters alike; being away from home is not a tenure
+  // question.
+  const [awayMode, setAwayMode] = useState(false)
 
   // Mirror the chat's timer in the header so the wait is still visible from the
   // Logs tab — which is exactly where someone goes to find out why it is slow.
@@ -153,6 +170,9 @@ export default function App() {
     // highlighted the new home while every tile still showed the old one's
     // weather, with nothing to say a request was in progress.
     setDashboard(null)
+    // The effect below re-centres on the new home, so leaving the toggle On
+    // would leave the control contradicting the screen.
+    setAwayMode(false)
     guard(getProfile(homeId).then((p) => {
       // Ignore a profile that arrives after the user has moved on again.
       if (homeId === currentHomeRef.current) setProfile(p)
@@ -188,6 +208,26 @@ export default function App() {
     log('ui', 'tab.switch', `Switched to the ${key} tab`)
   }
 
+  // Turning the toggle OFF must actually go home, not merely stop accepting new
+  // picks — otherwise the dashboard sits on the last place you looked while the
+  // control says you are home, which is worse than never having the toggle.
+  function toggleAway(next) {
+    setAwayMode(next)
+    log('ui', 'location.away', next
+      ? 'Away-from-home enabled — the dashboard can be pointed elsewhere'
+      : 'Away-from-home disabled — dashboard returned to the active home')
+    if (!next) loadDashboard()
+  }
+
+  // A hazard notification hands its question to the chat. The tab switch is part
+  // of the action, not a nicety: the chat column is `hidden` on the Logs tab, so
+  // prefilling without switching would drop the question somewhere invisible.
+  function askAboutHazard(question) {
+    setChatPrefill(question)
+    setTab('app')
+    log('ui', 'hazard.ask', `Hazard notification handed a question to the chat: ${question}`)
+  }
+
   if (!authed) {
     return <Login status={status} onSuccess={() => setAuthed(true)} />
   }
@@ -197,7 +237,13 @@ export default function App() {
 
   return (
     <div className="min-h-full p-4 lg:p-6">
-      <div className="mx-auto max-w-[1600px]">
+      {/* Outside the tab columns on purpose. A hazard notification that is
+          hidden because you happened to be on the Logs tab is not a
+          notification. */}
+      <ErrorBoundary label="Hazard notifications">
+        <HazardAlert dashboard={dashboard} onAsk={askAboutHazard} />
+      </ErrorBoundary>
+      <div className="mx-auto w-full">
         {/* Tab bar */}
         <div className="flex items-center gap-3 mb-4">
           <div className="flex rounded-lg overflow-hidden" style={{ border: '1px solid var(--border)' }}>
@@ -229,7 +275,25 @@ export default function App() {
 
         <div
           className={`grid gap-4 ${onApp
-            ? 'lg:grid-cols-[260px_minmax(0,1fr)_minmax(360px,420px)]'
+            // Both content columns are FRACTIONS, so the layout scales with the
+            // monitor instead of pinning chat to a fixed 360-420px and dumping
+            // every extra pixel into the dashboard.
+            //
+            // A first attempt gave chat `minmax(720px,840px)` — twice the old
+            // fixed width — which was the wrong instrument: a hard 720px floor
+            // crushed the dashboard to ~380px on a 1400px window. Doubling a
+            // MINIMUM is not the same as doubling a SHARE. Ratios cannot crush
+            // either side, because both shrink together.
+            //
+            // 2 : 1 gives chat a third of the content area — ~740px on a 2560px
+            // monitor, still well over the old fixed 420px. It was 1.4 : 1 (a
+            // 41.7% share) and is now 33.3%, which is that share reduced by
+            // exactly a fifth.
+            //
+            // The 380px floor is deliberately NOT scaled with it: it is a
+            // readability limit, not a proportion — below it a cited answer
+            // containing a table stops being readable at any window size.
+            ? 'lg:grid-cols-[260px_minmax(0,2fr)_minmax(380px,1fr)]'
             : 'lg:grid-cols-[260px_minmax(0,1fr)]'}`}
         >
           <Sidebar
@@ -249,12 +313,43 @@ export default function App() {
           {/* Dashboard column — hidden rather than unmounted, so switching tabs
               does not refetch the weather or lose the map's position. */}
           <main className={`space-y-4 min-w-0 ${onApp ? '' : 'hidden'}`}>
+            {/* Search and "use my location" are ALWAYS available. Typing an
+                address is a deliberate act; clicking a map is something you do
+                by accident while panning. Only the accidental one is gated. */}
             <LocationBar
               busy={loading}
               label={loc?.label}
               near={loc ? { lat: loc.latitude, lon: loc.longitude } : null}
               onPick={(target) => loadDashboard(target)}
             />
+
+            <div className="card p-3 flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <label htmlFor="away-toggle" className="text-sm font-medium">
+                  Away from current home location
+                </label>
+                <p className="text-xs muted mt-0.5">
+                  {awayMode
+                    ? 'You can pick anywhere on the map. Weather follows it — home rules and documents still come from the active home.'
+                    : 'Map clicks will not move the dashboard. Search and “use my location” still work.'}
+                </p>
+              </div>
+              <button
+                id="away-toggle"
+                type="button"
+                role="switch"
+                aria-checked={awayMode}
+                onClick={() => toggleAway(!awayMode)}
+                className="shrink-0 text-xs px-2.5 py-1 rounded"
+                style={{
+                  border: '1px solid var(--border)',
+                  background: awayMode ? 'var(--series-1)' : 'var(--surface-1)',
+                  color: awayMode ? '#fff' : 'var(--text-secondary)',
+                }}
+              >
+                {awayMode ? 'On' : 'Off'}
+              </button>
+            </div>
 
             {error && (
               <div className="card p-3 text-sm" style={{ color: 'var(--status-critical)' }}>
@@ -293,7 +388,13 @@ export default function App() {
                     lat={loc?.latitude}
                     lon={loc?.longitude}
                     apiKey={mapsKey}
+                    // The map stays visible and usable when home; what the
+                    // toggle gates is its ability to REPOINT the dashboard.
+                    // Passed as a FLAG rather than by withholding the callback —
+                    // swapping onPick to undefined crashed the Leaflet handler
+                    // and left it holding a stale closure afterwards.
                     onPick={(target) => loadDashboard(target)}
+                    canPick={awayMode}
                   />
                 </ErrorBoundary>
                 {/* `source`, not `provider`. The API has always returned `source`
@@ -332,6 +433,8 @@ export default function App() {
                 threadId={threadId}
                 homeId={homeId}
                 location={loc?.label}
+                prefill={chatPrefill}
+                onPrefillConsumed={() => setChatPrefill('')}
                 onBusyChange={setChatBusy}
                 onNewThread={() => setThreadId(newThreadId())}
                 onResumeThread={(id) => setThreadId(id)}

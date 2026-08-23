@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { normalizeLatLon } from '../utils/geo'
 import { MapContainer, Marker, TileLayer, useMap, useMapEvents } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
@@ -19,10 +20,20 @@ L.Icon.Default.mergeOptions({
   shadowUrl: markerShadow,
 })
 
-function ClickHandler({ onPick }) {
+function ClickHandler({ onPick, canPick }) {
   useMapEvents({
     click(e) {
-      onPick({ lat: e.latlng.lat, lon: e.latlng.lng })
+      // Gated on a FLAG, not on whether `onPick` was passed. Swapping the
+      // callback between a function and undefined both crashed here (it was
+      // called unconditionally) and left react-leaflet holding a stale closure,
+      // so picking stayed broken even after it was re-enabled.
+      if (!canPick || !onPick) return
+      // Normalised before it leaves the map. Leaflet keeps world copies, so
+      // panning past the date line yields longitudes like -267.43, which every
+      // weather provider rejects — Open-Meteo answers 400 and the dashboard
+      // renders the raw failing URL at the user. See utils/geo.
+      const point = normalizeLatLon(e.latlng.lat, e.latlng.lng)
+      if (point) onPick(point)
     },
   })
   return null
@@ -64,7 +75,7 @@ function useRadarFrame(enabled) {
 }
 
 /** Click anywhere to assess that spot. Coordinates feed the same tools the agent uses. */
-export default function MapPicker({ lat, lon, onPick }) {
+export default function MapPicker({ lat, lon, onPick, canPick }) {
   const [showRadar, setShowRadar] = useState(true)
   const radarFrame = useRadarFrame(showRadar)
 
@@ -102,7 +113,7 @@ export default function MapPicker({ lat, lon, onPick }) {
             />
           )}
           <Marker position={[lat, lon]} />
-          <ClickHandler onPick={onPick} />
+          <ClickHandler onPick={onPick} canPick={canPick} />
           <Recenter lat={lat} lon={lon} />
         </MapContainer>
       </div>
