@@ -628,6 +628,39 @@ which have no UI), set `DEMO_MODE=1` before launching, or put it in `.env`.
 
 ---
 
+
+## It warns you before you ask
+
+Everything above describes the system answering a question. The part that makes
+it a *forecaster* rather than a search box is that it also speaks first.
+
+When freeze or heat risk reaches moderate, or the weather service has an active
+advisory for wherever the dashboard is pointed, a notification appears on its
+own. It carries the level, a one-line headline, and a short list of what to do —
+for the **house**, not just for you. Disconnect the hoses before a freeze. Latch
+the garage door before a wind event. Move things off the basement floor before a
+flood.
+
+That last distinction is the whole point. The National Weather Service tells
+people how to stay safe and stops there, because protecting a building is not its
+job. Repeating "stay hydrated" would just be the radio.
+
+**None of that text is written by the AI**, which is what makes it safe to appear
+without being asked. It comes from the same fixed rules that decide the risk level
+in the first place. So it shows up instantly instead of after the six to a hundred
+seconds a free model takes to write a paragraph, it costs nothing, and it cannot
+invent a precaution on the one screen that talks to you unprompted. If you want
+advice specific to your home, the notification hands the question to the chat —
+but it puts it in the box rather than sending it, because deciding to ask is
+yours.
+
+Dismissing one does not silence it. Alerts are remembered by *condition*, so
+waving away a moderate freeze warning cannot hide the severe one that arrives
+later, and anything still active collapses into a small badge you can click to
+bring back.
+
+---
+
 ## 13. Questions you might have
 
 **If the code makes all the real decisions, what is the AI actually for?**

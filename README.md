@@ -84,6 +84,31 @@ Six agentic concepts, each with an evaluation case that proves it:
 
 ## The parts worth looking at
 
+**It speaks first.** A forecaster that only answers when asked is a search box.
+When freeze or heat reaches moderate, or any official advisory is active for the
+location, a notification appears with the level, the headline, and what to do
+about it — without being asked.
+
+The text is **not written by the model**, and that is what makes it safe to
+appear unprompted. It comes from the same deterministic assessors the agent
+itself may not second-guess, plus a table mapping advisory type to home actions.
+So it is instant (a model call on the free tier measured 6–100 seconds), it costs
+nothing, and it cannot invent a precaution on the one surface that speaks without
+being asked. The tailored answer is one click away instead: *Ask the assistant*
+puts the question in the chat box and focuses it, but never sends it — the
+notification decides something is worth asking; you decide to ask.
+
+Two details worth noticing. **Dismissing is not silencing**: dismissals are keyed
+to the *condition*, so dismissing "freeze: moderate" cannot mute the "freeze:
+severe" that arrives an hour later, and a dismissed alert collapses to a pill
+showing how many are still active. And **official guidance and home actions are
+never merged** — the National Weather Service tells people how to stay safe and
+stops there, because protecting the building is not its job. That gap is this
+product's whole subject: relaying "Heat Advisory — stay hydrated" just repeats
+the radio.
+
+---
+
 **The reasoning tree.** Ask a DIY question and open the reasoning panel. Pruned
 branches are struck through **with the reason they were discarded**. An option
 ruled out by a rule shows *"ruled out"* rather than a low score — "a rule forbade

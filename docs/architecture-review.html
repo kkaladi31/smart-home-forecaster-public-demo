@@ -3280,7 +3280,73 @@
     </p>
   </section>
 
-  </main>
+  
+  <!-- ================= forecaster speaks first ================= -->
+  <section id="sSPEAK">
+    <div class="sec-head"><span class="sec-num">NEW</span><h2 class="sec-title">The forecaster speaks first</h2></div>
+
+    <p class="lede">
+      A forecaster that only answers when asked is a search box. Everything else in this system
+      responds to a question; this is the one surface that starts the conversation. When freeze or
+      heat reaches <code>moderate</code>, or any official advisory is active for the resolved
+      location, a dialog appears with the level, the headline and the actions &mdash; unprompted.
+    </p>
+
+    <h3>Why the text is deterministic</h3>
+    <p>
+      The obvious implementation asks the model to write a tailored warning. That was rejected for
+      the same reason hazard <em>levels</em> are kept out of the model's hands, only stronger:
+      here nobody asked for the text and nobody is waiting to judge it.
+    </p>
+    <table>
+      <thead><tr><th></th><th>deterministic</th><th>model-written</th></tr></thead>
+      <tbody>
+        <tr><td>Latency</td><td>instant</td><td><b>6&ndash;100 s</b> measured on the free tier</td></tr>
+        <tr><td>Cost</td><td>zero &mdash; can run on every load forever</td><td>one call per dashboard load</td></tr>
+        <tr><td>Failure mode</td><td>none, the text is fixed</td><td>an invented precaution, on the one surface that speaks unprompted</td></tr>
+      </tbody>
+    </table>
+    <p>
+      A warning that arrives after the user has moved on is not a warning. Sources are
+      <code>assess_freeze_risk</code>, <code>assess_heat_risk</code> and
+      <code>tools/home_precautions.py</code>. The tailored answer is one click away instead:
+      <b>Ask the assistant</b> prefills the chat and focuses it but <b>never sends</b> &mdash; the
+      notification decides something is worth asking; the person decides to ask.
+    </p>
+
+    <h3>What an advisory means for the building</h3>
+    <p>
+      The National Weather Service says how to keep <em>people</em> safe and stops there, because
+      protecting the building is not its job. That gap is this product's whole subject: relaying
+      &ldquo;Heat Advisory &mdash; stay hydrated&rdquo; repeats the radio.
+      <code>tools/home_precautions.py</code> maps advisory type to home actions and is attached in
+      <code>tools/alerts.py</code>, so <b>the agent reads the same field the UI does</b>; a second
+      definition in the front end would drift from the first within a month.
+    </p>
+    <p>
+      Official guidance and home actions are shown <b>separately and never merged</b>: one is quoted
+      from an authority, the other is ours. An unrecognised event yields <b>nothing</b> rather than
+      filler &mdash; advice that fits any hazard tells the reader nothing and costs the specific
+      advice its credibility.
+    </p>
+
+    <h3>Two properties that are easy to get wrong</h3>
+    <p>
+      <b>Dismissing is not silencing.</b> Dismissals key on the <em>condition</em>, not the
+      notification, so dismissing <code>freeze: moderate</code> cannot mute the
+      <code>freeze: severe</code> that arrives an hour later. A dismissed alert collapses to a pill
+      stating how many remain active, so the way back is always visible.
+    </p>
+    <p>
+      <b>It renders through a portal.</b> Leaflet builds its own stacking context up to
+      <code>z-index: 1000</code>, so the dialog first rendered <em>underneath the map</em>. Raising
+      the number beats today's map and loses to the next component with an opinion &mdash; and
+      cannot fix an ancestor <code>transform</code> trapping a fixed-position child at all.
+      Portalling to <code>document.body</code> leaves both arguments.
+    </p>
+  </section>
+
+</main>
 </div>
 
 <script>

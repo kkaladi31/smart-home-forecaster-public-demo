@@ -1902,3 +1902,69 @@ and explains — it does not decide.** Every hazard level, every dollar figure, 
 is produced by deterministic code that runs regardless of what the model says. That constraint is what made
 the system testable with 42 evaluation cases, auditable in its numbers, and safe enough to put in front of
 someone standing in their house at 2 a.m. wondering if their pipes are about to burst.
+
+---
+
+## 24. The forecaster speaks first
+
+A forecaster that only answers when asked is a search box. Everything else in
+this system responds to a question; this is the one surface that starts the
+conversation. When freeze or heat reaches `moderate`, or any official advisory is
+active for the resolved location, a dialog appears with the level, the headline
+and the actions — unprompted.
+
+### Why the text is deterministic
+
+The obvious implementation asks the model to write a tailored warning. That was
+rejected, and the reasoning is the same one that keeps hazard *levels* out of the
+model's hands, only stronger — because here nobody asked for the text and nobody
+is waiting to judge it.
+
+| | deterministic | model-written |
+|---|---|---|
+| Latency | instant | **6–100 s** measured on the free tier |
+| Cost | zero, so it can run on every load forever | one call per dashboard load |
+| Failure mode | none — the text is fixed | an invented precaution, on the one surface that speaks unprompted |
+
+A warning that arrives after the user has moved on is not a warning. Sources are
+`assess_freeze_risk`, `assess_heat_risk` and `tools/home_precautions.py`. The
+tailored answer is one click away instead: **Ask the assistant** prefills the chat
+and focuses it but **never sends** — the notification decides something is worth
+asking; the person decides to ask.
+
+### What an advisory means for the building
+
+The National Weather Service says how to keep *people* safe and stops there,
+because protecting the building is not its job. That gap is this product's whole
+subject: relaying *"Heat Advisory — stay hydrated"* repeats the radio.
+
+`tools/home_precautions.py` maps advisory type to home actions — disconnect hoses
+before a freeze, latch the garage door before a wind event, move valuables off
+basement floors before a flood. It is attached in `tools/alerts.py`, so **the
+agent reads the same field the UI does**; a second definition in the front end
+would drift from the first within a month.
+
+Official guidance and home actions are shown **separately and never merged**: one
+is quoted from an authority, the other is ours, and blurring that would attribute
+our advice to them. An unrecognised event yields **nothing** rather than filler —
+advice that fits any hazard tells the reader nothing and costs the specific
+advice its credibility.
+
+### Two properties that are easy to get wrong
+
+**Dismissing is not silencing.** Dismissals key on the *condition*, not the
+notification, so dismissing `freeze: moderate` cannot mute the `freeze: severe`
+that arrives an hour later. Silencing an escalation is the one thing a hazard
+notification must never do. A dismissed alert collapses to a pill stating how
+many remain active, so the way back is always visible.
+
+**It renders through a portal.** Leaflet builds its own stacking context with
+panes and controls up to `z-index: 1000`, so the dialog first rendered
+*underneath the map*. Raising the number would beat today's map and lose to the
+next component with an opinion — and cannot fix the other half of the problem at
+all, since any ancestor with a `transform` traps a fixed-position child
+regardless of z-index. Portalling to `document.body` leaves both arguments.
+
+
+---
+
