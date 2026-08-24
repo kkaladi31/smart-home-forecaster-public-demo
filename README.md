@@ -138,8 +138,7 @@ most about.
 | | |
 |---|---|
 | [`EVALUATION.md`](EVALUATION.md) | **What was tested, what passed, and what is still wrong** — every case listed |
-| [`docs/architecture-review.md`](docs/architecture-review.md) | How the system is built and why — diagrams, decision history, known limitations |
-| [`docs/how-it-works.md`](docs/how-it-works.md) | A gentler walkthrough of one full request |
+| [`docs/how-it-works.md`](docs/how-it-works.md) | How the system works start to finish — one full request, assuming no prior knowledge |
 | [`docs/reasoning.md`](docs/reasoning.md) | The Tree-of-Thought design: parameters, rubric, pruning rules |
 | [`docs/agents.md`](docs/agents.md) | The seven agents and the coordination topology |
 | [`docs/safety.md`](docs/safety.md) | The risk register, including the ones **not** fully mitigated |

@@ -6,8 +6,10 @@
 
 **Who this is for:** anyone who wants to understand this system without already knowing what
 RAG, ReAct, or a vector database is. Every term gets explained before it gets used. If you
-want the deep version with the measurements and trade-offs, read
-[`architecture-review.md`](architecture-review.md) instead.
+want the design decisions and the measurements behind them, read
+[`reasoning.md`](reasoning.md) for the Tree-of-Thought search,
+[`agents.md`](agents.md) for the agent topology, and
+[`safety.md`](safety.md) for the risk register.
 
 An interactive version of this page is at [`how-it-works.html`](how-it-works.html).
 
