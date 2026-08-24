@@ -886,6 +886,57 @@ makes a threshold mean something.
 > The same discipline applies to the semantic-cache threshold (0.65) and the episodic recall floor
 > (0.30).
 
+### Whose words the threshold judges
+
+A calibrated threshold is only as good as the text it scores, and for most of this
+project's life that text was **written by the model**. `search_home_policies` takes
+its query as a tool argument, so the model composed the search string *and* the
+gate was scored against that same string.
+
+Measured, asked *"can I rent out my roof for a commercial billboard?"* — a question
+the corpus does not answer:
+
+| scored against | best passage | verdict |
+|---|---|---|
+| the model's search string, `"rent roof for commercial billboard permit HOA Minneapolis"` | **−0.16** | clears the −4.0 floor → **grounded** |
+| the user's own question | **−10.96** | far below → **refuses** |
+
+The model had drifted its query toward the vocabulary of the corpus — *permit*,
+*HOA*, *Minneapolis* — and lifted an irrelevant permit passage over the bar. No
+rule was invented, so this was imprecision rather than danger, but the gate was
+answerable to the wrong text.
+
+**The awkward part is that the model's phrasing is doing real work.** The follow-up
+*"what about artificial turf instead?"* only becomes searchable because the model
+expands it against the conversation. The defect and the feature are the same
+mechanism, so removing one naively removes the other.
+
+They are therefore split by **role**, not merged: the model chooses what to
+**fetch**, and the user's question decides whether it **answers them**.
+`search_policies` accepts a `gate_query` and runs a second cross-encoder pass
+stored as `gate_score`, applied *after* the ordering pass — so the passages
+returned and their order are unchanged and only the verdict can differ. The
+question rides the run config beside `persona` and `home_id`, for the same reason
+those do: it is turn metadata the orchestrator holds, and a model must not be able
+to assert it about its own turn.
+
+Measured on the same retrieved passages before the design was chosen:
+
+```
+A5   "can I rent out my roof..."      model -0.16   user -10.96   now refuses
+A12  "what about artificial turf..."  model +5.54   user  -2.47   still grounded
+A3   "am I allowed to replace..."     model +4.46   user  +4.43   unchanged
+```
+
+A12 clears the floor with 1.53 to spare, which is what made the split safe.
+
+**This was the third instance of one pattern** — the Advisor's safety gate scored
+the model's paraphrase of an option, and an earlier grounding defect scored the
+model's query rather than the tenancy the user had stated. All three were fixed by
+making the user's question authoritative. The general form is worth carrying into
+any system like this: **a gate whose input the model selects is a gate the model
+can talk past.**
+
 **Two engineering constraints worth mentioning.**
 
 - **No new dependency.** The reranker runs the quantised ONNX model on `onnxruntime` + `tokenizers`,
@@ -1642,6 +1693,8 @@ flowchart TB
     D4["T8-T11 guardrails<br/>emergency · no false alarm<br/>high-risk · PII"]
     D5["T12 semantic cache<br/>paraphrase hits, others miss"]
     D6["T16 jurisdiction isolation<br/>each home sees only its own rules"]
+    D7["T17-T21 separation & integrity<br/>demo cannot reach real data · index<br/>clean · episodic scoped · PII · ingest"]
+    D8["T22-T27 reasoning, research, pros<br/>beam prunes with reasons · injection<br/>screen · router · licence gate<br/>· evidence floor · provenance"]
   end
 
   subgraph L2["LAYER 2 — 17 end-to-end agent cases · live LLM · behavioural assertions"]
