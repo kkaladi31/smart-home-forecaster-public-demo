@@ -21,6 +21,7 @@ from __future__ import annotations
 import math
 import re
 
+from memory.rerank import MIN_RERANK_SCORE
 from tools.research import untrusted
 
 # How much a source's origin should count, independent of how well it matches.
@@ -64,6 +65,33 @@ _NOT_CONTENT = re.compile(
     re.I)
 MIN_PASSAGE_CHARS = 120     # below this there is nothing to reason over
 PASSAGE_CHARS = 700         # one passage: long enough to carry a real instruction
+
+# The relevance floor for a retrieved passage.
+#
+# Deliberately the SAME constant the retrieval path refuses at, not a second
+# number of its own: it is the same cross-encoder producing scores on the same
+# scale, and two thresholds for one model drift apart the moment either is tuned.
+#
+# Without this, research could not refuse. `_normalise` min-maxes the raw scores
+# into 0..1 before ranking, so a pack in which nothing was relevant looked
+# exactly like one in which everything was. Measured on "do I need a permit to
+# replace my water heater?": six passages between -10.88 and -11.26 were handed
+# to the model as evidence, and the top one reported `relevance 0.88`. The
+# project's headline claim is cite-or-refuse — retrieval refused, research did
+# not, and the asymmetry was invisible because the normalised number looked fine.
+MIN_PASSAGE_RELEVANCE = MIN_RERANK_SCORE
+
+# How many passages one domain may own in a finished pack.
+#
+# `providers.dedupe` already caps RESULTS per domain, and on a snippet-only
+# provider that was the same thing — one snippet yields exactly one passage. It
+# stops being the same thing the moment a provider returns page content: two
+# results from one site split into as many as eight passages. Measured with
+# Tavily on the permit question, four of six evidence slots belonged to a single
+# plumbing contractor's marketing blog, which the model then reads as four
+# sources agreeing. An evidence pack whose sources agree because they ARE the
+# same source is worse than a smaller one.
+MAX_PASSAGES_PER_DOMAIN = 2
 
 
 def authority_for(domain: str) -> tuple[float, str]:
@@ -152,32 +180,50 @@ def _normalise(scores: list[float]) -> list[float]:
     return [(s - low) / (high - low) for s in scores]
 
 
-def rank_passages(query: str, candidates: list[dict], limit: int = 6) -> list[dict]:
-    """Score and order candidate passages. Returns the top `limit`.
+def rank_passages(query: str, candidates: list[dict],
+                  limit: int = 6) -> tuple[list[dict], list[dict]]:
+    """Score and order candidate passages. Returns `(kept, dropped)`.
 
         final = 0.60 * relevance + 0.25 * authority + 0.15 * search position
+
+    Two gates apply **after** scoring, and both record a reason — a passage
+    screened out for being irrelevant should be as visible as one screened out
+    for being hostile:
+
+    * anything below `MIN_PASSAGE_RELEVANCE` on the **raw** cross-encoder score
+      is dropped, so a pack can legitimately come back empty;
+    * no domain may hold more than `MAX_PASSAGES_PER_DOMAIN` slots.
+
+    The floor is applied to the raw score, never the normalised one. Normalising
+    first is what hid the problem: min-max maps the best of six terrible passages
+    to 1.0.
 
     Relevance comes from the cross-encoder already in the project
     (`memory/rerank.py`) — no new dependency, and the same model that decides
     whether a policy passage is grounded. When it is unavailable the weight falls
-    back to search order, which is what a plain search engine would have given.
+    back to search order, which is what a plain search engine would have given,
+    and **the floor is not applied** — there is no score to apply it to, and
+    refusing everything because the reranker is missing would turn a degraded
+    ranking into no evidence at all.
     """
     if not candidates:
-        return []
+        return [], []
 
     texts = [c["text"] for c in candidates]
     relevance: list[float] | None = None
+    raw: list[float] | None = None
     try:
         from memory import rerank
 
         if rerank.available():
-            raw = rerank.score(query, texts)
-            if raw:
+            scored = rerank.score(query, texts)
+            if scored:
+                raw = [float(s) for s in scored]
                 relevance = _normalise(raw)
                 for c, r in zip(candidates, raw):
-                    c["rerank_score"] = round(float(r), 2)
+                    c["rerank_score"] = round(r, 2)
     except Exception:
-        relevance = None
+        relevance, raw = None, None
 
     for i, c in enumerate(candidates):
         rel = relevance[i] if relevance is not None else 1.0 / (1 + c.get("rank", 0))
@@ -185,8 +231,39 @@ def rank_passages(query: str, candidates: list[dict], limit: int = 6) -> list[di
         c["relevance"] = round(rel, 3)
         c["score"] = round(0.60 * rel + 0.25 * c["authority"] + 0.15 * position, 3)
 
-    candidates.sort(key=lambda c: c["score"], reverse=True)
-    return candidates[:limit]
+    dropped: list[dict] = []
+    survivors = candidates
+    if raw is not None:
+        survivors = []
+        for c, score in zip(candidates, raw):
+            if score < MIN_PASSAGE_RELEVANCE:
+                dropped.append({
+                    "url": c["url"], "domain": c["domain"],
+                    "reason": (f"not relevant to the question "
+                               f"(score {score:.1f}, floor {MIN_PASSAGE_RELEVANCE})"),
+                    "irrelevant": True})
+            else:
+                survivors.append(c)
+
+    survivors.sort(key=lambda c: c["score"], reverse=True)
+
+    kept: list[dict] = []
+    per_domain: dict[str, int] = {}
+    for c in survivors:
+        if len(kept) >= limit:
+            # Out of room, not rejected. Only reasons go in `dropped`.
+            break
+        host = c.get("domain", "")
+        if per_domain.get(host, 0) >= MAX_PASSAGES_PER_DOMAIN:
+            dropped.append({
+                "url": c["url"], "domain": host,
+                "reason": (f"one source may hold at most "
+                           f"{MAX_PASSAGES_PER_DOMAIN} passages in a pack"),
+                "crowding": True})
+            continue
+        per_domain[host] = per_domain.get(host, 0) + 1
+        kept.append(c)
+    return kept, dropped
 
 
 def build_pack(query: str, results, limit: int = 6) -> dict:
@@ -222,7 +299,8 @@ def build_pack(query: str, results, limit: int = 6) -> dict:
                 "authority_label": label, "rank": r.rank, "provider": r.provider,
             })
 
-    ranked = rank_passages(query, candidates, limit=limit)
+    ranked, rank_dropped = rank_passages(query, candidates, limit=limit)
+    dropped.extend(rank_dropped)
     for i, c in enumerate(ranked, start=1):
         c["ref"] = f"E{i}"
     return {"query": query, "passages": ranked, "dropped": dropped,

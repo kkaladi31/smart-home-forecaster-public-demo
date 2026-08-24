@@ -301,6 +301,6 @@ set that looks identical to "no rule exists".
 
 ### Measured
 
-**42/42** evaluation cases pass on the free model, covering cross-home
+**43/43** evaluation cases pass on the free model, covering cross-home
 jurisdiction isolation, audience filtering, the grounding gate, injection
 screening, and that the published build cannot reach real data or a paid model.

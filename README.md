@@ -137,6 +137,7 @@ most about.
 
 | | |
 |---|---|
+| [`EVALUATION.md`](EVALUATION.md) | **What was tested, what passed, and what is still wrong** — every case listed |
 | [`docs/architecture-review.md`](docs/architecture-review.md) | How the system is built and why — diagrams, decision history, known limitations |
 | [`docs/how-it-works.md`](docs/how-it-works.md) | A gentler walkthrough of one full request |
 | [`docs/reasoning.md`](docs/reasoning.md) | The Tree-of-Thought design: parameters, rubric, pruning rules |
@@ -147,8 +148,11 @@ most about.
 
 ## Evaluation
 
+**43 of 43 cases pass** on the free model this project ships with. Every case, and
+every known limitation, is listed in **[`EVALUATION.md`](EVALUATION.md)**.
+
 ```bash
-python eval/run_eval.py --tools-only   # 25 deterministic cases, no model, ~2 min
+python eval/run_eval.py --tools-only   # 26 deterministic cases, no model, ~2 min
 python eval/run_eval.py                # adds 17 end-to-end agent cases, ~20 min
 python -m eval.ledger                  # coverage at the current commit
 ```

@@ -664,6 +664,83 @@ def _case_research_screens_and_ranks():
                           f"problems: {problems or 'none'}")
 
 
+def _case_research_refuses_and_caps_one_source():
+    """Research can return NOTHING, and no single source may own the pack.
+
+    Two gates, each added because the alternative was measured rather than
+    imagined:
+
+      * a pack whose passages are all irrelevant comes back **empty**, not as a
+        ranked list of the least-bad ones. `_normalise` min-maxes raw scores into
+        0..1 *before* ranking, so six passages scoring around -11 rendered
+        identically to six scoring +8, and the worst pack this project produced
+        reported its top passage at `relevance 0.88`. Retrieval already refused
+        below this exact threshold; research did not, and the gap was invisible
+        precisely because the normalised number looked healthy.
+      * one domain may hold at most `MAX_PASSAGES_PER_DOMAIN` slots.
+        `providers.dedupe` caps RESULTS per domain, which was the same thing only
+        while a provider returned snippets — one snippet yields one passage. It
+        stops being the same thing with page content: a live Tavily run split two
+        results into eight passages and gave four of six evidence slots to a
+        single plumbing contractor's marketing blog, which a model reads as four
+        independent sources agreeing.
+
+    Pure: constructed pages, no network, no LLM.
+    """
+    from tools.research import evidence
+    from tools.research.providers import Result
+
+    query = "how do I anchor a heavy mirror into drywall"
+    problems = []
+
+    # 1. Real prose, ordinary length, and nothing whatever to do with the
+    #    question. This is not a strawman: it is the shape of what a search
+    #    provider returns when a query confuses it.
+    off_topic = (
+        "Osteopathic medicine is a branch of medical practice in the United "
+        "States. Physicians who complete the training receive the DO degree and "
+        "are licensed to practise across every speciality. The curriculum adds "
+        "study of the musculoskeletal system to an otherwise conventional "
+        "medical syllabus, and graduates complete the same residencies. ")
+    irrelevant = evidence.build_pack(query, [
+        Result(title="Doctor of Osteopathic Medicine", provider="t", rank=0,
+               url="https://en.wikipedia.org/wiki/Doctor_of_Osteopathic_Medicine",
+               content=off_topic * 4),
+        Result(title="What is a DO?", url="https://www.icom.edu/what-is-a-do",
+               provider="t", rank=1, content=off_topic * 4),
+    ])
+    if irrelevant["passages"]:
+        problems.append("irrelevant passages were cited as evidence: " + ", ".join(
+            f"{c['domain']}@{c.get('rerank_score')}" for c in irrelevant["passages"]))
+    if not any(d.get("irrelevant") for d in irrelevant["dropped"]):
+        problems.append("nothing was recorded as dropped for irrelevance")
+
+    # 2. One domain, genuinely relevant, and long enough to fill the pack alone.
+    on_topic = (
+        "Toggle bolts spread the load across a wider area of drywall and are "
+        "typically rated to 50 lb in half-inch board. Drill a pilot hole sized to "
+        "the toggle, insert it, and tighten until the flange seats against the "
+        "board. For anything heavier, locate a stud and drive the screw into "
+        "framing rather than relying on the panel to carry it. ")
+    crowded = evidence.build_pack(query, [
+        Result(title="Anchors, part one", url="https://oneshop.example/a",
+               provider="t", rank=0, content=on_topic * 8),
+        Result(title="Anchors, part two", url="https://oneshop.example/b",
+               provider="t", rank=1, content=on_topic * 8),
+    ])
+    held = [c for c in crowded["passages"] if c["domain"] == "oneshop.example"]
+    if len(held) > evidence.MAX_PASSAGES_PER_DOMAIN:
+        problems.append(f"one domain held {len(held)} passages, "
+                        f"cap is {evidence.MAX_PASSAGES_PER_DOMAIN}")
+    if not any(d.get("crowding") for d in crowded["dropped"]):
+        problems.append("no passage was recorded as dropped for crowding")
+
+    return not problems, (
+        f"irrelevant pack kept {len(irrelevant['passages'])} and screened "
+        f"{len(irrelevant['dropped'])}; one domain held {len(held)} of "
+        f"{evidence.MAX_PASSAGES_PER_DOMAIN} allowed; problems: {problems or 'none'}")
+
+
 def _case_router_advises_without_overriding():
     """The Router labels a turn, and cannot make one worse than an unrouted turn.
 
@@ -891,6 +968,7 @@ TOOL_CASES = [
     {"id": "T23", "name": "Research screens hostile and junk sources", "concept": "Safety (prompt injection) / research", "fn": _case_research_screens_and_ranks},
     {"id": "T24", "name": "Router advises without overriding", "concept": "Multi-agent coordination", "fn": _case_router_advises_without_overriding},
     {"id": "T25", "name": "Licence is a gate, not a score", "concept": "Safety / Pro Finder", "fn": _case_licence_is_a_gate_not_a_score},
+    {"id": "T26", "name": "Research refuses irrelevant evidence and caps one source", "concept": "RAG / research quality", "fn": _case_research_refuses_and_caps_one_source},
 ]
 
 

@@ -5,6 +5,7 @@ import {
 } from '../api'
 import { log } from '../logbus'
 import { fmtDuration } from '../utils/duration'
+import EvidencePanel from './EvidencePanel'
 import Markdown from './Markdown'
 import ReasoningTree from './ReasoningTree'
 
@@ -166,12 +167,14 @@ export default function Chat({
           pending.done = true
           pending.durationMs = ev.duration_ms
           // Structured extras the server lifted out of the full result (the
-          // `content` above is only a preview). Today: the Advisor's search tree.
+          // `content` above is only a preview): the Advisor's search tree, and
+          // the web evidence behind the answer.
           if (ev.reasoning_tree) {
             pending.tree = ev.reasoning_tree
             pending.strategy = ev.strategy
             pending.truncated = ev.truncated
           }
+          if (ev.evidence) pending.evidence = ev.evidence
         }
       } else if (ev.type === 'llm_turn') {
         // The model's own thinking time — usually the largest single slice.
@@ -607,6 +610,11 @@ function TraceFeed({ steps, active, elapsed }) {
               {s.tree && (
                 <div className="mt-1">
                   <ReasoningTree tree={s.tree} strategy={s.strategy} truncated={s.truncated} />
+                </div>
+              )}
+              {s.evidence && (
+                <div className="mt-1">
+                  <EvidencePanel evidence={s.evidence} />
                 </div>
               )}
             </div>

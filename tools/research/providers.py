@@ -1,8 +1,8 @@
 """Web-search providers behind one result shape.
 
-Replaces the single hard-coded DuckDuckGo call in `tools/websearch.py`, which had
-no caching, no deduplication, no telemetry, no rate-limit handling, and did not
-use the project's pooled retrying session.
+Replaces a single hard-coded DuckDuckGo call (`tools/websearch.py`, since
+deleted) which had no caching, no deduplication, no telemetry, no rate-limit
+handling, and did not use the project's pooled retrying session.
 
 Two providers:
 

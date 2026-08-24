@@ -49,6 +49,7 @@ from agents.llm import build_llm
 from memory.rag_store import search_policies
 from tools.contractors import find_contractors
 from tools.homes import current_home_id, load_home
+from tools.pros import trades
 from tools.safety import check_high_risk
 from agents.researcher import research
 from tools.research import evidence
@@ -144,6 +145,39 @@ def _evidence_block(ctx: dict) -> str:
     truncated to 160 characters each.
     """
     return evidence.render((ctx.get("web") or {}).get("pack") or {})
+
+
+def _evidence_summary(ctx: dict) -> dict:
+    """A compact, renderable view of the evidence pack, for the UI.
+
+    Deliberately small: this rides inside a tool result that the stream
+    truncates, and it is paid for in tokens on a free model. Enough to show
+    *which* sources were used, how far each was trusted, and — the part with no
+    other surface — **what was screened out and why**.
+
+    The drops are the point. A pipeline that discards a hostile page silently is
+    indistinguishable, from the outside, from one that never saw it; and a pack
+    that came back empty because everything was irrelevant looks exactly like a
+    search that failed. Both distinctions were invisible until this existed.
+    """
+    web = ctx.get("web") or {}
+    pack = web.get("pack") or {}
+    return {
+        "provider": web.get("provider", ""),
+        "queries": [q[:110] for q in (web.get("queries") or [])],
+        "passages": [
+            {"ref": c["ref"], "domain": c["domain"], "url": c["url"],
+             "authority": c["authority_label"], "score": c["score"]}
+            for c in pack.get("passages", [])
+        ],
+        "dropped": [
+            {"domain": d.get("domain") or "unknown", "reason": (d.get("reason") or "")[:72]}
+            for d in pack.get("dropped", [])
+        ][:6],
+    }
+
+
+_NO_EVIDENCE = {"provider": "", "queries": [], "passages": [], "dropped": []}
 
 
 _PROPOSE_SYSTEM = (
@@ -264,20 +298,35 @@ def _escalate(result: dict, contractors: list[dict]) -> str:
     )
 
 
-def _referral_contractors(question: str, home_id: str | None) -> list[dict]:
-    """The pro list for a referral. Best-effort: a directory miss is not a failure.
+def _referral_contractors(question: str,
+                          home_id: str | None) -> tuple[list[dict], str | None]:
+    """The pro list for a referral, **and the trade it was actually matched on**.
 
-    A CSV read in the demo build and a licence-registry query in the full one —
-    milliseconds either way, which is the whole reason the referral path can skip
-    the search and still name someone real.
+    Best-effort: a directory miss is not a failure. A CSV read in the demo build
+    and a licence-registry query in the full one — milliseconds either way, which
+    is the whole reason the referral path can skip the search and still name
+    someone real.
+
+    The trade label travels with the rows because `find_pros` returns a *browse*
+    of the directory when nothing matched, and a browse rendered under the same
+    heading as a match is a false claim. Nothing here can tell the two apart from
+    the rows alone — every row looks equally legitimate, because every row IS a
+    legitimately licensed professional. The difference is only whether any of
+    them do this job.
     """
     try:
-        return find_contractors(question, limit=3, home_id=home_id)
+        rows = find_contractors(question, limit=3, home_id=home_id)
     except Exception:
-        return []
+        return [], None
+    try:
+        matched = trades.identify(question)
+    except Exception:
+        matched = []
+    return rows, (matched[0].label if matched else None)
 
 
-def _refer_to_professional(risk: dict, contractors: list[dict]) -> str:
+def _refer_to_professional(risk: dict, contractors: list[dict],
+                           trade_label: str | None = None) -> str:
     """The referral itself, written in Python.
 
     Deliberately not a model call. The content is fixed by the hazard table —
@@ -301,7 +350,15 @@ def _refer_to_professional(risk: dict, contractors: list[dict]) -> str:
         "contractor.",
     ]
     if contractors:
-        lines += ["", "Licensed options from your directory:"]
+        # Two different claims, so two different headings. With a matched trade
+        # these are candidates FOR THE JOB; without one they are simply the
+        # nearby licensed professionals, and saying so costs a line of prose
+        # against a user ringing a handyman about a gas line.
+        lines += ["", (
+            f"Licensed {trade_label.lower()} professionals from your directory:"
+            if trade_label else
+            "From your directory — no listed trade matches this job, so these are "
+            "nearby licensed professionals rather than candidates for it:")]
         for c in contractors:
             lines.append(
                 f"- **{c['name']}** — {c['trade']}, {c['rating']}★, "
@@ -340,7 +397,7 @@ def run_advisor(question: str, persona: str = "owner", model: str | None = None,
     # picture and a false one.
     risk = check_high_risk(question)
     if risk.get("high_risk"):
-        contractors = _referral_contractors(question, home_id)
+        contractors, referral_trade = _referral_contractors(question, home_id)
         telemetry.record("agent", "advisor.high_risk_referral",
                          f"Skipped the beam — {risk['category']} is a referral, not a decision",
                          level="warn",
@@ -348,7 +405,7 @@ def run_advisor(question: str, persona: str = "owner", model: str | None = None,
         return {
             "question": question,
             "home_id": home_id,
-            "final_answer": _refer_to_professional(risk, contractors),
+            "final_answer": _refer_to_professional(risk, contractors, referral_trade),
             "evaluations": [],
             "tree": [],
             "winner": None,
@@ -357,6 +414,10 @@ def run_advisor(question: str, persona: str = "owner", model: str | None = None,
             "truncated": False,
             "truncated_because": None,
             "high_risk": risk,
+            # No search ran, so there is nothing to show — and an empty panel
+            # saying so is more honest than omitting the field, which the UI
+            # would render identically to "the search found nothing".
+            "evidence": _NO_EVIDENCE,
             "sources": {"web": [], "policies": [],
                         "contractors": [c["name"] for c in contractors]},
         }
@@ -439,6 +500,7 @@ def run_advisor(question: str, persona: str = "owner", model: str | None = None,
         "llm_calls": result["llm_calls"] + 1,   # + the composing call
         "truncated": result["truncated"],
         "truncated_because": result["truncated_because"],
+        "evidence": _evidence_summary(ctx),
         "sources": {
             "web": [c["url"] for c in
                     ((ctx["web"] or {}).get("pack") or {}).get("passages", [])],

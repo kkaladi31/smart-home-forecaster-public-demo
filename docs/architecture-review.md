@@ -16,7 +16,7 @@
 | **Agents** | **7** — supervisor, Router, Researcher, Advisor, Critic, Cost, Pro Finder |
 | **Tools** | **13** |
 | **Memory layers** | 4 (+ semantic answer cache) |
-| **Evaluation** | **42 / 42** — 25 deterministic + 17 end-to-end, on the free model |
+| **Evaluation** | **43 / 43** — 26 deterministic + 17 end-to-end, on the free model |
 | **Cold answer** | 11.7 s (median of 5) |
 | **API surface** | **26 endpoints** |
 
@@ -137,6 +137,8 @@ Markdown viewers. An interactive HTML version is at
 21. [Defect log](#21-defect-log--how-the-architecture-was-derived)
 22. [Known limitations](#22-known-limitations)
 23. [Review Q&A](#23-review-qa--likely-challenges)
+24. [The forecaster speaks first](#24-the-forecaster-speaks-first)
+25. [The Researcher, and untrusted text](#25-the-researcher-and-untrusted-text)
 
 ---
 
@@ -1007,10 +1009,31 @@ produced answers that drifted toward the old topic.
 
 ## 11. The Advisor: genuine Tree-of-Thought
 
-Where the orchestrator is a ReAct loop, the Advisor is an explicit multi-step reasoning pipeline. The
-distinction that matters at review: **branch, evaluate and select are three separate LLM calls**, not
-one prompt asking the model to "consider several options." The returned option tree is therefore a
-real artefact of the reasoning, not a post-hoc narration of it.
+Where the orchestrator is a ReAct loop, the Advisor is an explicit **beam search**
+over a tree of candidate approaches. The distinction that matters at review: the
+branches are real objects that get scored, pruned and recorded — not one prompt
+asking the model to "consider several options" — and **the winner is chosen by
+`argmax` in Python, never by a model call.**
+
+That last point was a defect before it was a feature. Selection used to be a third
+LLM call handed the scored options, which meant the scores the interface displayed
+and the recommendation the user read **could disagree**, because the model was
+free to pick a different one. A comparison the reader cannot trust is worse than
+no comparison at all.
+
+**The parameters, all explicit in code** (`agents/beam.py`, `agents/rubric.py`):
+
+| | |
+|---|---|
+| Branching factor | b₁ = 4 at depth 1, b₂ = 2 at depth 2 |
+| Beam width | k = 2 survivors carried forward |
+| Depth | **1** in a demo build, **2** in a full build; a turn the Router calls *complex* raises the demo to 2, and never lowers either |
+| Pruning | gates (hard) · absolute floor **4.0** · relative floor **3.0** behind the best |
+| Budget | 4 LLM calls · 45 s · 8 nodes — the composing call is the caller's, not the search's |
+| Rubric | **0.63 of the weight is deterministic or RAG-grounded; 0.37 is the Critic's judgement** |
+
+The depth asymmetry is the "advises, never overrides" rule expressed as a single
+`max()`: a Router miss can make an answer *slower*, never worse.
 
 ### Figure 9 · Tree-of-Thought pipeline
 
@@ -1022,19 +1045,24 @@ flowchart TB
     direction LR
     G1["home profile<br/>walls, year built, systems"]
     G2["search_policies<br/>persona-filtered rules"]
-    G3["web_search<br/>DuckDuckGo, cited URLs"]
-    G4["find_contractors<br/>synthetic directory"]
+    G3["Researcher<br/>ranked, screened evidence pack"]
+    G4["find_contractors<br/>licence-gated directory"]
   end
 
-  G --> GT["grounding text block"]
-  GT --> B["LLM CALL 1 — BRANCH<br/>propose 3-4 DISTINCT approaches<br/>strict JSON out"]
-  B --> BR{"3-4 candidate branches"}
+  G --> GT["grounding text (system role)<br/>+ evidence pack (user role ONLY)"]
+  GT --> B["LLM CALL 1 — PROPOSE<br/>b1 = 4 distinct approaches<br/>strict JSON out"]
+  B --> C1["CRITIC — score every node<br/>6 weighted criteria"]
+  C1 --> P1{"PRUNE<br/>gates · floor 4.0 · 3.0 behind best"}
+  P1 --> K["keep best k = 2"]
+  K --> X["LLM CALL 2 — EXPAND<br/>b2 = 2 concrete plans per survivor<br/>depth 2 only"]
+  X --> C2["CRITIC — score the leaves"]
+  C2 --> P2{"PRUNE again"}
+  P2 --> SEL["SELECT — argmax in PYTHON<br/>not a model call"]
+  SEL --> S["LLM CALL 3 — COMPOSE<br/>writes up the WINNING node<br/>may not substitute another"]
+  S --> OUT["returns: recommendation<br/>+ the whole tree with prune reasons<br/>+ evidence pack + sources"]
 
-  BR --> E["LLM CALL 2 — EVALUATE<br/>score each 1-10 with pros/cons against:<br/>item weight · wall type · occupant role<br/>difficulty · cost · damage risk"]
-  E --> EV{"scored evaluations"}
-
-  EV --> S["LLM CALL 3 — SELECT<br/>choose best, write recommendation<br/>with options-compared table + citations"]
-  S --> OUT["returns: recommendation<br/>+ options_compared with scores<br/>+ sources: web / policies / contractors"]
+  P1 -.->|"every branch pruned"| ESC["no safe DIY path found<br/>escalate to a professional"]
+  P2 -.-> ESC
 ```
 
 **Gather is concurrent and best-effort.** A failed web search costs the Advisor its citations, not its
@@ -1050,25 +1078,31 @@ recommendation.
    serialise the other two behind it.
 3. **Grounding is best-effort by design.** Each lookup is individually wrapped. A DuckDuckGo failure
    degrades the answer's citations; it does not fail the recommendation.
-4. **Branch is forced to emit strict JSON** ("No prose, no markdown"), with a regex-based extractor as
-   a second line of defence and a neutral fallback so the pipeline never dead-ends on a malformed
+4. **Propose is forced to emit strict JSON** ("No prose, no markdown"), with a regex-based extractor
+   as a second line of defence and a neutral fallback so the pipeline never dead-ends on a malformed
    reply.
-5. **Evaluate is given explicit scoring dimensions.** Not "rate these" but: suitability for the item's
-   weight and wall type, whether the occupant's role permits it — *renters often cannot drill* —
-   difficulty, cost, and damage risk. Naming the dimensions is what makes the scores comparable across
-   runs.
-6. **Select receives the scores, not the raw branches**, plus a concrete contractor suggestion when
-   the job warrants a professional. It is instructed to surface the scored comparison in the answer,
-   so the user sees the reasoning rather than just its conclusion.
-7. **The persona flows through the whole pipeline** — into the policy filter, into the grounding text,
+5. **The Critic scores against a fixed rubric and cannot move the gates.** Safety risk comes from the
+   deterministic hazard table; permission fit must cite a retrieved passage or defaults to neutral. So
+   the two criteria that can *rule an option out* are exactly the two the model does not author. The
+   Critic supplies suitability, reversibility and effort — 0.37 of the weight.
+6. **Selection is `argmax` in Python, and the composing call is told which node won.** It writes the
+   winner up; it may not substitute another. Pruned branches travel with the result *including their
+   reason*, because a branch discarded invisibly is a branch nobody can question — and a good branch
+   killed by a weak evaluation signal is the one failure mode this design cannot detect on its own.
+7. **If every branch is pruned, nothing is invented.** The search returns "no safe DIY path found" and
+   escalates to a professional. That is a demonstrable behaviour rather than a claim about one.
+8. **The persona flows through the whole pipeline** — into the policy filter, into the grounding text,
    into the evaluation criteria, and into the final write-up. A renter and an owner get genuinely
    different recommendations for the same question.
 
-> **Honest trade-off.** Three sequential LLM calls is the dominant cost in the system: evaluation case
-> A6 takes ~49 s against ~12 s for a weather question. This was accepted rather than optimised away,
-> because collapsing the three calls into one prompt would destroy the property that makes it
-> Tree-of-Thought. If latency here ever became a product problem, the right fix is running BRANCH and
-> the gather concurrently, or caching branches per question class — not merging the calls.
+> **Honest trade-off.** Sequential LLM calls are the dominant cost in the system: evaluation case A6
+> takes ~49 s against ~12 s for a weather question, and depth 2 adds a further propose/critique round.
+> This was accepted rather than optimised away, because collapsing the calls into one prompt would
+> destroy the property that makes it Tree-of-Thought — a single prompt asked to "consider options"
+> yields a *narration* of reasoning, not an artefact of it. If latency became a product problem the
+> right fix is running PROPOSE concurrently with the gather, or caching branches per question class —
+> not merging the calls. The depth default already encodes half that trade: a demo build searches
+> depth 1 unless the question earns depth 2.
 
 ---
 
@@ -1600,7 +1634,7 @@ Thirty-three golden cases, all passing, in two layers with deliberately differen
 
 ```mermaid
 flowchart TB
-  subgraph L1["LAYER 1 — 25 deterministic tool cases · no LLM · free · fully reproducible"]
+  subgraph L1["LAYER 1 — 26 deterministic tool cases · no LLM · free · fully reproducible"]
     direction LR
     D1["T1-T3 risk math<br/>severe / heat index / no false positive"]
     D2["T4-T6 source fallbacks<br/>geocode · weather · EIA not-live"]
@@ -1968,3 +2002,149 @@ regardless of z-index. Portalling to `document.body` leaves both arguments.
 
 ---
 
+## 25. The Researcher, and untrusted text
+
+Replaces the raw single search call that gave the model **four results truncated
+to 160 characters each** — 640 characters total, from which it was expected to
+reason about load ratings and building practice.
+
+    plan → fan out → merge + dedupe → screen → rank → pack
+
+Query planning is **templates, not a model**: three variations cover what this
+product actually asks — the question as posed, the question grounded in the home's
+construction, and the question aimed at primary sources — and a fourth model call
+per turn is real latency on a free model for a gain nobody could measure.
+
+Ranking is `0.60 × relevance + 0.25 × authority + 0.15 × position`, where
+relevance comes from the cross-encoder already loaded for RAG (no new dependency,
+and the same model that decides whether a policy passage is grounded) and
+authority from a static, auditable domain table.
+
+### The `site:` finding
+
+Appending the **text** `"energy.gov guidance"` to a burst-pipe query returned
+**zero** energy.gov pages across twelve results. `site:energy.gov` on the same
+question returned energy.gov **three times out of three**.
+
+**A qualifier is a hint the engine may ignore; `site:` is a filter it cannot.**
+
+This mattered beyond tidiness. Free-tier search returns almost entirely unrated
+SEO pages, so the 0.25 authority term had nothing to discriminate on and ranking
+was effectively relevance-only. The demo was showing the pipeline while quietly
+not showing what the pipeline is *for*.
+
+One restricted query is added *alongside* the unrestricted ones — last, so
+tightening the query budget drops it first, and never instead of them, so a site
+filter that finds nothing cannot empty the pack.
+
+A caveat worth stating, because it is easy to get wrong: **a query operator is
+one provider's dialect, not a portable interface.** `site:` is a DuckDuckGo idiom.
+A provider that parses queries semantically rather than lexically can be actively
+harmed by it, so query planning has to know which provider it is planning for.
+
+### Two gates the ranking did not have
+
+**A relevance floor.** `search_home_policies` refuses below
+`MIN_RERANK_SCORE = -4.0`. Research had no equivalent: `rank_passages` sorted and
+took the top six, and nothing could empty a pack. Measured on *"do I need a permit
+to replace my water heater?"* against the frozen snapshot — which is exactly what
+a grader re-running this repository sees:
+
+| ref | raw cross-encoder score | domain |
+|---|---|---|
+| E1 | −10.93 | facebook.com |
+| E2 | −10.88 | reddit.com |
+| E3 | −11.26 | docs.nrel.gov |
+| E4 | −11.25 | codes.iccsafe.org |
+
+Every passage roughly seven points below the floor retrieval refuses at, and all
+of them handed to the model as evidence. `_normalise` min-maxes into 0..1
+**before** ranking, so E1 reported `relevance 0.88` on a raw score of −10.93: a
+pack in which nothing was relevant was indistinguishable from one in which
+everything was.
+
+**This project's claim is cite-or-refuse. Retrieval refused; research did not** —
+and the gap was invisible precisely because the normalised number looked healthy.
+
+The floor now applies to the **raw** score and reuses the retrieval constant
+rather than inventing a second one: same cross-encoder, same scale, and two
+thresholds for one model drift apart the moment either is tuned. It is
+deliberately **not** applied when the reranker is unavailable — there is no score
+to apply it to, and refusing everything because a model failed to load would turn
+a degraded ranking into no evidence at all.
+
+That permit question now returns an empty pack, and the answer cites nothing
+rather than citing five sources about something else.
+
+**A per-domain cap on passages.** `providers.dedupe` caps *results* per domain,
+which is the same thing only while a provider returns snippets — one snippet
+yields exactly one passage. It stops being the same thing when a provider returns
+page content, because two results from one site can split into as many as eight
+passages, and a model reads that as several independent sources agreeing. This
+gate therefore guards a configuration **this demo does not ship**: its free
+provider returns snippets. It is here because the failure is silent, and because
+a cap that only appears once someone changes provider is a cap nobody remembers
+to add.
+
+Both gates record a **reason**, so a passage screened out for irrelevance is as
+visible as one screened out for being hostile — and `research.no_relevant_evidence`
+is logged at warn level when a pack empties. "The search found nothing" and "the
+search worked and none of it was about the question" look identical from the
+outside and are completely different faults.
+
+### R14 — prompt injection, five layers
+
+Ordered by how much each actually protects, because the ordering is the argument:
+
+1. **Fetched text never enters a `SystemMessage`.** Structural, mechanically
+   checkable, and the only layer that is a genuine control rather than a hope.
+   The grounding text and the evidence block are two separate functions rather
+   than one with a flag *for this reason*.
+2. **Delimited and banner-wrapped**, with delimiter lookalikes escaped, so a page
+   cannot close the block and start issuing instructions outside it.
+3. **A detector drops and logs** — nine patterns, invisible and bidirectional
+   characters, long base64 blobs. Deliberately the *least* load-bearing layer:
+   pattern matching against adversarial text is a losing game played alone, and
+   treating it as the primary defence is how a system ends up trusting a page
+   because it did not say "ignore previous instructions".
+4. **Citations are resolved in Python.** The model writes `[E3]`; a fabricated
+   `[E9]` renders as `[unknown source]` rather than a plausible link. This also
+   catches ordinary citation invention, not just hostile pages.
+5. **No side-effecting tool exists to reach.** Every tool is read-only, so a
+   successful injection achieves bad prose at worst — which the deterministic
+   safety screens still override.
+
+### Research fixtures
+
+`SHF_RESEARCH_FIXTURES` serves a frozen snapshot instead of the live web. **Off by
+default** — live evidence is the Researcher's whole purpose. It exists for the two
+cases where the live web is a liability: a graded run, which must give a grader
+the same answer months later, and a recording, where a rate-limited scrape ruins
+the take. The free search path is a scraper, not an API, which is why a sticky
+rate-limit flag exists at all.
+
+It intercepts at `providers.search`, the single network boundary, so fixture
+results still flow through the real dedupe, injection screen, cross-encoder
+ranking and pack builder. Freezing the finished evidence pack would have been
+easier and would have tested nothing.
+
+Fixture mode is **exclusive, not a preference with live fallback** — a fallback
+would mean a stale snapshot silently became a live search, and the run would look
+reproducible while not being it. A missing fixture **raises**, because an empty
+list is indistinguishable from a working search that found nothing.
+
+### The evidence panel
+
+The Researcher used to be the only agent whose work reached no surface at all:
+citations appeared inline in the prose, and everything else — which queries ran,
+which pages were screened, why a pack came back empty — reached nothing but the
+Logs tab. `web/src/components/EvidencePanel.jsx` is the counterpart to the
+reasoning tree and exists for the same reason. That panel shows *options*
+considered and ruled out; this one shows *sources* considered and ruled out.
+
+It carries three claims the system makes about itself and could not otherwise
+evidence: a hostile page was **dropped** rather than merely ranked low; an empty
+pack was a **judgement** rather than a failure; and no single site owns the pack,
+so apparent corroboration is real. Authority is shown as its **label**, never its
+number — "manufacturer" is a claim a reader can dispute, while "0.90" invites
+trust in a weight they have no way to check.

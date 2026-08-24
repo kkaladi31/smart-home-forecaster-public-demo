@@ -641,7 +641,7 @@
       <div class="fact"><dt>Agents</dt><dd>7</dd></div>
       <div class="fact"><dt>Tools</dt><dd>13</dd></div>
       <div class="fact"><dt>Memory layers</dt><dd>4</dd></div>
-      <div class="fact"><dt>Eval cases</dt><dd>42 / 42</dd></div>
+      <div class="fact"><dt>Eval cases</dt><dd>43 / 43</dd></div>
       <div class="fact"><dt>Cold answer</dt><dd>11.7 s</dd></div>
       <div class="fact"><dt>API surface</dt><dd>26 endpoints</dd></div>
     </dl>
@@ -672,7 +672,7 @@
       <br><br>
       Some sections below describe an earlier stage of the design. Where a count
       differs, the current figures are: <b>7 agents, 13 tools, 26 endpoints,
-      42/42 evaluation cases</b>.
+      43/43 evaluation cases</b>.
     </div>
   </header>
 
@@ -1984,10 +1984,16 @@
     <div class="sec-head"><span class="sec-num">11</span><h2 class="sec-title">The Advisor: genuine Tree-of-Thought</h2></div>
 
     <p>
-      Where the orchestrator is a ReAct loop, the Advisor is an explicit multi-step reasoning pipeline. The
-      distinction that matters at review: <strong>branch, evaluate and select are three separate LLM calls</strong>,
-      not one prompt asking the model to "consider several options." The returned option tree is therefore a real
-      artefact of the reasoning, not a post-hoc narration of it.
+      Where the orchestrator is a ReAct loop, the Advisor is an explicit <strong>beam search</strong> over a tree of
+      candidate approaches &mdash; branching factor b&#8321;&nbsp;=&nbsp;4 then b&#8322;&nbsp;=&nbsp;2, beam width
+      k&nbsp;=&nbsp;2, depth 1 in a demo build and 2 in a full one. The branches are real objects that get scored,
+      pruned and recorded, not one prompt asking the model to "consider several options" &mdash; and
+      <strong>the winner is chosen by <code>argmax</code> in Python, never by a model call.</strong>
+    </p>
+    <p>
+      That last point was a defect before it was a feature. Selection used to be a third LLM call handed the scored
+      options, which meant the scores the interface displayed and the recommendation the user read
+      <strong>could disagree</strong>. A comparison the reader cannot trust is worse than no comparison at all.
     </p>
 
     <figure>
@@ -2011,20 +2017,20 @@
     <div class="row" style="gap:10px">
       <div class="nd det"><h5>Home profile</h5><p>Walls, year built, systems</p></div>
       <div class="nd fast"><span class="pin">1</span><h5><code>search_policies</code></h5><p>Persona-filtered rules</p></div>
-      <div class="nd fast"><span class="pin">2</span><h5><code>web_search</code></h5><p>DuckDuckGo, cited URLs — <b>the slow one</b></p></div>
+      <div class="nd fast"><span class="pin">2</span><h5>Researcher</h5><p>Ranked, screened evidence pack — <b>the slow one</b></p></div>
       <div class="nd fast"><h5><code>find_contractors</code></h5><p>Synthetic directory</p></div>
     </div>
     <p style="font-size:11px;color:var(--ink-soft);margin:12px 0 0">Each is individually wrapped: a failed web search costs the Advisor its <b>citations</b>, not its recommendation.</p>
   </div>
   <div class="arw"></div>
 
-  <div class="nd det" data-id="ground" data-links="gather b"><h5>Grounding text block</h5>
-    <p>Home + rules + web results, assembled once and passed to all three calls below.</p></div>
+  <div class="nd det" data-id="ground" data-links="gather b"><h5>Grounding text + evidence pack</h5>
+    <p>Home and rules go in the <b>system</b> message. Retrieved web text goes in the <b>user</b> message and nowhere else &mdash; that separation is the load-bearing layer of the prompt-injection mitigation.</p></div>
   <div class="arw"></div>
 
   <div class="nd llm" data-id="b" data-links="ground br"><span class="pin">3</span>
-    <span class="sub">LLM call 1 of 3</span>
-    <h5>BRANCH — propose 3–4 distinct approaches</h5>
+    <span class="sub">LLM &middot; propose</span>
+    <h5>PROPOSE — b&#8321; = 4 distinct approaches</h5>
     <p>Forced to strict JSON ("no prose, no markdown"), with a regex extractor as backup and a neutral fallback so the pipeline never dead-ends.</p>
   </div>
   <div class="arw"></div>
@@ -2040,19 +2046,20 @@
   <div class="arw"></div>
 
   <div class="nd llm" data-id="e" data-links="br ev"><span class="pin">4</span>
-    <span class="sub">LLM call 2 of 3</span>
-    <h5>EVALUATE — score each 1–10 with pros and cons</h5>
-    <p>Against <b>named dimensions</b>: item weight · wall type · whether the occupant's role permits it (renters often cannot drill) · difficulty · cost · damage risk. Naming them is what makes scores comparable across runs.</p>
+    <span class="sub">LLM &middot; critic, then a deterministic prune</span>
+    <h5>CRITIC — score every node, then PRUNE</h5>
+    <p>Six weighted criteria. <b>Safety risk is taken from the hazard table and permission fit must cite a retrieved passage</b>, so the two criteria that can rule an option out are the two the model does not author &mdash; 0.63 of the weight is computed or grounded, 0.37 is the Critic's. Pruning is by gate, by an absolute floor of 4.0, and by falling more than 3.0 behind the best.</p>
   </div>
   <div class="arw"></div>
 
-  <div class="nd det" data-id="ev" data-links="e s"><h5>Scored evaluations, sorted</h5></div>
+  <div class="nd det" data-id="ev" data-links="e s"><h5>SELECT — <code>argmax</code> in Python</h5>
+    <p>Not a model call. Ties break deterministically: safety, then grounded permission, then cost, then effort, then proposal order.</p></div>
   <div class="arw"></div>
 
   <div class="nd llm" data-id="s" data-links="ev out"><span class="pin">5</span>
-    <span class="sub">LLM call 3 of 3</span>
-    <h5>SELECT — choose and write the recommendation</h5>
-    <p>Receives the <b>scores</b>, not the raw branches, plus a concrete contractor when the job warrants a professional. Instructed to surface the comparison so the user sees the reasoning, not just its conclusion.</p>
+    <span class="sub">LLM &middot; compose</span>
+    <h5>COMPOSE — write up the winning node</h5>
+    <p>Told <b>which node won</b> and may not substitute another. Pruned branches travel with the result including their reason, because a branch discarded invisibly is a branch nobody can question. If every branch is pruned, nothing is invented: the search escalates to a professional.</p>
   </div>
   <div class="arw"></div>
 
@@ -2830,7 +2837,7 @@
     </p>
 
     <figure>
-      <div class="fig-label"><span>Figure 16 · Two-layer evaluation strategy</span><span><b>42 / 42 passing</b></span></div>
+      <div class="fig-label"><span>Figure 16 · Two-layer evaluation strategy</span><span><b>43 / 43 passing</b></span></div>
       <div class="plate">
 <div class="dg">
   <div class="dg-legend">
@@ -2840,7 +2847,7 @@
   </div>
 
   <div class="grp det">
-    <span class="glab">Layer 1 · 25 deterministic tool cases — the regression backbone</span>
+    <span class="glab">Layer 1 · 26 deterministic tool cases — the regression backbone</span>
     <div class="row" style="gap:10px">
       <div class="nd det"><h5>T1–T3 · Risk math</h5><p>Hard freeze severe · heat index 114 °F · no false positive on a warm forecast</p></div>
       <div class="nd det"><h5>T4–T6 · Source fallbacks</h5><p>Geocode · weather backup · EIA flagged not-live</p></div>

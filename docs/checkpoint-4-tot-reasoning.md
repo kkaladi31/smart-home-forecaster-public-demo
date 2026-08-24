@@ -350,7 +350,7 @@ reversible, or simply wrong.
 
 ### Measured
 
-- **42/42** evaluation cases pass on the free model, including a case asserting
+- **43/43** evaluation cases pass on the free model, including a case asserting
   that a renter's drilling branch is pruned *and that the reason is stated*.
 - Depth 2 costs ≈ 140 s versus ≈ 110 s at depth 1 on `openai/gpt-oss-20b:free`,
   the model pinned when this was measured (withdrawn from OpenRouter's free tier

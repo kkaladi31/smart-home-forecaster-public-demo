@@ -217,6 +217,9 @@ def ask_advisor(question: str) -> dict:
         ],
         "strategy": result["strategy"],
         "truncated": result["truncated"],
+        # Which web sources were used, how far each was trusted, and what was
+        # screened out. Rendered as its own card; see `_evidence_summary`.
+        "evidence": result.get("evidence", {}),
         "sources": result["sources"],
     }
 

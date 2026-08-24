@@ -11,16 +11,19 @@ Query planning is **templates, not a model**. Three variations cover what this
 product actually asks — the question as posed, the question grounded in the
 home's construction, and the question aimed at primary sources — and a fourth
 LLM call per turn is real latency on a free model for a gain nobody could
-measure. `SHF_RESEARCH_LLM_PLAN=1` is left as an escape hatch if that stops being
-true; it is not implemented behind the flag yet, and the flag is checked so the
-decision is visible in code rather than only in a design note.
+measure.
+
+An `SHF_RESEARCH_LLM_PLAN` escape hatch used to be *checked* here without ever
+being *read*, on the theory that a flag keeps a decision visible in code. It does
+not. A function with no call sites is dead code that reads as live, and the next
+person to find it reasonably concludes LLM planning exists behind the flag. The
+decision belongs in this paragraph, where it cannot quietly stop being true.
 
 Everything here is best-effort. A failed search costs the caller its citations,
 never its answer.
 """
 from __future__ import annotations
 
-import os
 import re
 from concurrent.futures import ThreadPoolExecutor
 
@@ -169,9 +172,12 @@ def research(question: str, home: dict | None = None, *,
         pack = evidence.build_pack(question, merged, limit=passages)
 
         injections = [d for d in pack["dropped"] if d.get("injection")]
+        irrelevant = [d for d in pack["dropped"] if d.get("irrelevant")]
+        crowding = [d for d in pack["dropped"] if d.get("crowding")]
         span.update({"queries": len(queries), "results": len(merged),
                      "passages": len(pack["passages"]), "provider": provider_used,
-                     "dropped": len(pack["dropped"]), "injections": len(injections)})
+                     "dropped": len(pack["dropped"]), "injections": len(injections),
+                     "irrelevant": len(irrelevant), "crowding": len(crowding)})
 
     if injections:
         # Visible, not silent: a page trying to steer the assistant is exactly the
@@ -182,14 +188,23 @@ def research(question: str, home: dict | None = None, *,
             level="warn",
             data={"sources": [d["domain"] for d in injections][:5]})
 
+    if irrelevant and not pack["passages"]:
+        # "The search found nothing" and "the search worked and none of it was
+        # about the question" look identical from outside and are completely
+        # different faults — one is a provider problem, the other is a query
+        # problem. Recording the second is what makes refusing to cite legible
+        # rather than looking like a silent failure.
+        telemetry.record(
+            "research", "research.no_relevant_evidence",
+            f"Searched {len(merged)} result(s) and kept none — every passage scored "
+            f"below the relevance floor",
+            level="warn",
+            data={"dropped": len(irrelevant),
+                  "sources": [d["domain"] for d in irrelevant][:5]})
+
     return {"ok": bool(pack["passages"]), "question": question, "queries": queries,
             "provider": provider_used, "pack": pack,
             "error": "" if pack["passages"] else ("; ".join(errors) or "no usable evidence")}
-
-
-def llm_planning_enabled() -> bool:
-    """Escape hatch for LLM query planning. Templates are the default — see module doc."""
-    return os.getenv("SHF_RESEARCH_LLM_PLAN", "").strip().lower() in {"1", "true", "yes", "on"}
 
 
 if __name__ == "__main__":

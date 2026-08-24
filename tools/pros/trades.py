@@ -101,7 +101,23 @@ TRADES: tuple[Trade, ...] = (
         key="plumbing", label="Plumbing",
         terms=("plumber", "plumbing", "pipe", "pipes", "drain", "drains", "faucet",
                "toilet", "water heater", "sewer", "leak", "burst pipe", "sump pump",
-               "water line", "repipe"),
+               "water line", "repipe",
+               # Gas fitting. The ordering comment further down has always claimed
+               # that "a question about a gas line reaches plumbing before it
+               # reaches handyman" — and it could not, because there was no gas
+               # term anywhere in this file. `identify("how do I run a gas line
+               # myself")` returned an EMPTY list, the caller fell through to an
+               # untargeted browse of the directory, and the answer named an
+               # electrician. That lands on the one class of question where the
+               # high-risk short-circuit makes the referral list the WHOLE answer.
+               #
+               # Phrases only, never a bare "gas": "lower my gas bill" is a cost
+               # question, and routing it to a plumber would swap one wrong trade
+               # for another. "natural gas" is left out for the same reason —
+               # "run a natural gas line" already matches on "gas line".
+               "gas line", "gas lines", "gas pipe", "gas pipes", "gas piping",
+               "gas fitting", "gas fitter", "gas valve", "gas meter",
+               "gas appliance", "gas connection", "propane line", "propane tank"),
         license_types=("PLUMBING CONTRACTOR",),
         restricted=True,
     ),

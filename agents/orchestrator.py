@@ -442,7 +442,7 @@ def _compose_message(
 # Tools whose result carries structured data the UI renders as its own widget,
 # mapped to the keys worth lifting out. Everything else is shown as text.
 _STRUCTURED_TOOL_KEYS = {
-    "ask_advisor": ("reasoning_tree", "strategy", "truncated"),
+    "ask_advisor": ("reasoning_tree", "strategy", "truncated", "evidence"),
 }
 
 
