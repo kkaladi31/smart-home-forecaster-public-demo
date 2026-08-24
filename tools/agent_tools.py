@@ -265,6 +265,32 @@ def _current_routing() -> dict:
     return routing if isinstance(routing, dict) else {}
 
 
+def _current_question() -> str | None:
+    """The user's own words for this turn, read from the run config.
+
+    Rides the config for exactly the reason `persona` and `home_id` do: it is
+    turn metadata the orchestrator holds, and a model must not be able to assert
+    it about its own turn. That is the whole point here — the model authors the
+    search string, so a gate judging the search string is a gate the model can
+    talk past.
+
+    Already PII-redacted: `_sanitize_input` runs before `_prepare_turn`, so the
+    raw value never reaches a config, a log, or a store.
+
+    Empty outside a graph run — a direct call, an eval case, a `__main__` smoke
+    test. Every consumer must treat that as "no opinion" and fall back, because
+    it is not an error state: it is the system behaving as it did before this
+    existed.
+    """
+    try:
+        from langgraph.config import get_config
+
+        question = (get_config().get("configurable") or {}).get("question")
+    except Exception:
+        return None
+    return question if isinstance(question, str) and question.strip() else None
+
+
 def _current_persona() -> str | None:
     """The persona for this turn, read from the run config rather than the model.
 
@@ -365,7 +391,8 @@ def search_home_policies(query: str) -> dict:
     false, do NOT invent a rule — tell the user you don't have a source and suggest
     they verify with their actual HOA, city, or lease."""
     home_id = current_home_id()
-    passages = _search_policies(query, k=4, audience=_current_persona(), home_id=home_id)
+    passages = _search_policies(query, k=4, audience=_current_persona(),
+                                home_id=home_id, gate_query=_current_question())
 
     # Prefer the cross-encoder's judgement when it is available: it scores the
     # query and passage together, so unlike the dense similarity it can tell
@@ -374,10 +401,20 @@ def search_home_policies(query: str) -> dict:
     # behaviour degrades to what it was before rather than failing open.
     reranked = [p for p in passages if p.get("rerank_score") is not None]
     if reranked:
-        relevant = [p for p in reranked if p["rerank_score"] >= MIN_RERANK_SCORE]
+        # `gate_score` judges the USER's question; `rerank_score` judges the
+        # string the MODEL searched with. Grounding is decided on the former
+        # wherever it exists, because the model choosing the text its own gate
+        # is judged on is the defect this closes — measured at -0.16 (passes)
+        # against -10.96 (refuses) on the same question and the same passage.
+        #
+        # Ordering still uses `rerank_score`, so the passages and their sequence
+        # are byte-identical to before. Only the verdict can differ.
+        gated = [p for p in reranked if p.get("gate_score") is not None]
+        judge = "gate_score" if len(gated) == len(reranked) and gated else "rerank_score"
+        relevant = [p for p in reranked if p[judge] >= MIN_RERANK_SCORE]
         grounded = bool(relevant)
-        top_score = reranked[0]["rerank_score"]
-        scorer = "cross-encoder"
+        top_score = reranked[0][judge]
+        scorer = "cross-encoder" if judge == "rerank_score" else "cross-encoder (user's question)"
     else:
         relevant = [p for p in passages if (p.get("score") or 0.0) >= POLICY_RELEVANCE_THRESHOLD]
         grounded = bool(relevant)

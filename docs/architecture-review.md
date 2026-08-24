@@ -16,7 +16,7 @@
 | **Agents** | **7** — supervisor, Router, Researcher, Advisor, Critic, Cost, Pro Finder |
 | **Tools** | **13** |
 | **Memory layers** | 4 (+ semantic answer cache) |
-| **Evaluation** | **43 / 43** — 26 deterministic + 17 end-to-end, on the free model |
+| **Evaluation** | **44 / 44** — 27 deterministic + 17 end-to-end, on the free model |
 | **Cold answer** | 11.7 s (median of 5) |
 | **API surface** | **26 endpoints** |
 
@@ -1634,7 +1634,7 @@ Thirty-three golden cases, all passing, in two layers with deliberately differen
 
 ```mermaid
 flowchart TB
-  subgraph L1["LAYER 1 — 26 deterministic tool cases · no LLM · free · fully reproducible"]
+  subgraph L1["LAYER 1 — 27 deterministic tool cases · no LLM · free · fully reproducible"]
     direction LR
     D1["T1-T3 risk math<br/>severe / heat index / no false positive"]
     D2["T4-T6 source fallbacks<br/>geocode · weather · EIA not-live"]

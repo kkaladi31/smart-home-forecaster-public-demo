@@ -404,6 +404,7 @@ def search_policies(
     home_id: str | None = None,
     hybrid: bool = True,
     rerank: bool = True,
+    gate_query: str | None = None,
 ) -> list[dict]:
     """Return the top-k relevant policy passages with citations.
 
@@ -418,6 +419,22 @@ def search_policies(
     3. **Rerank** — a cross-encoder rescores the survivors jointly against the
        query, which is what makes `rerank_score` a trustworthy relevance signal.
        See memory/rerank.py.
+
+    `gate_query` adds a **second** scoring pass, stored as `gate_score`, and
+    changes nothing else — not what is retrieved, not the order. It exists
+    because the caller of this function is a model-authored search string, and a
+    grounding gate that judges the model's own phrasing can be talked past.
+    Measured: asked *"can I rent out my roof for a commercial billboard?"* — a
+    question the corpus does not answer — the model searched for "rent roof for
+    commercial billboard permit HOA Minneapolis", which scored **−0.16** against
+    an irrelevant permit passage and cleared the −4.0 floor, while the user's own
+    words scored **−10.96** and did not.
+
+    Retrieval deliberately keeps using `query`. The model's phrasing is doing
+    real work there: it resolves elided follow-ups like *"what about artificial
+    turf instead?"* into something searchable. **The defect and the feature are
+    the same mechanism**, so the fix separates them by role — the model chooses
+    what to *fetch*, the user's question decides whether it *answers them*.
 
     Each result: {text, citation, source_title, section, file, audience,
     home_scope, jurisdiction, score, lexical_rank, rerank_score}. `score` remains the dense
@@ -508,6 +525,19 @@ def search_policies(
         if scores is not None:
             for cid, s in zip(shortlist, scores):
                 by_id[cid]["rerank_score"] = round(s, 3)
+
+            # The gate's own score, against the user's words rather than the
+            # model's. Computed here so it rides with the passage instead of
+            # forcing every caller to re-run the cross-encoder, and applied
+            # AFTER the ordering pass above so it cannot change which passages
+            # come back or in what order — only the verdict about them.
+            if gate_query and gate_query.strip() and gate_query.strip() != query.strip():
+                gate_scores = reranker.score(
+                    gate_query, [by_id[cid]["text"] for cid in shortlist])
+                if gate_scores is not None:
+                    for cid, s in zip(shortlist, gate_scores):
+                        by_id[cid]["gate_score"] = round(s, 3)
+
             shortlist = sorted(shortlist, key=lambda cid: by_id[cid]["rerank_score"],
                                reverse=True)
 

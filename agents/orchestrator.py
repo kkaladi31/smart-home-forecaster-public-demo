@@ -817,7 +817,12 @@ def stream_answer(
             # assert about its own turn.
             config={"configurable": {"thread_id": thread_id, "persona": persona,
                                      "home_id": home_id,
-                                     "routing": prep["routing"].as_dict()},
+                                     "routing": prep["routing"].as_dict(),
+                                     # The user's own words, so the grounding
+                                     # gate judges the question rather than the
+                                     # search string the model wrote for itself.
+                                     # Redacted upstream by `_sanitize_input`.
+                                     "question": user_message},
                     "callbacks": [tracer]},
             stream_mode=["updates", "messages"],
         ):
@@ -1008,7 +1013,8 @@ def answer_with_trace(
         # drift, or the eval suite would exercise different retrieval than the UI.
         config={"configurable": {"thread_id": thread_id, "persona": persona,
                                  "home_id": home_id,
-                                 "routing": prep["routing"].as_dict()}},
+                                 "routing": prep["routing"].as_dict(),
+                                 "question": user_message}},
     )
     messages = result["messages"]
     final = messages[-1]

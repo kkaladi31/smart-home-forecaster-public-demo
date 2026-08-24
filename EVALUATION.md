@@ -1,17 +1,17 @@
 # Evaluation
 
-**43 of 43 cases pass**, on the free model this project ships with
+**44 of 44 cases pass**, on the free model this project ships with
 (`nvidia/nemotron-3-super-120b-a12b:free`).
 
 Two layers:
 
 | Layer | Cases | Needs a model? | Runtime |
 |---|---|---|---|
-| Deterministic tool cases | 26 | no — **no API key required** | ~2 min |
+| Deterministic tool cases | 27 | no — **no API key required** | ~2 min |
 | End-to-end agent cases | 17 | yes, live | ~20 min |
 
 ```bash
-python eval/run_eval.py --tools-only   # the 26 deterministic cases
+python eval/run_eval.py --tools-only   # the 27 deterministic cases
 python eval/run_eval.py                # adds the 17 agent cases
 python -m eval.ledger                  # coverage at the current commit
 ```
@@ -33,6 +33,14 @@ never as a failed assertion. Both shapes occurred, and both were briefly reporte
 as a headline feature regressing when the truth was a struggling free-tier
 provider.
 
+That classifier does not catch everything, and the ledger is what covers the rest.
+The run recorded here initially came back **40/44**: three cases raised *"upstream
+error: service temporarily overloaded"* and one hit an infrastructure error. None
+was an assertion failure. Because evidence accrues per case, re-running only those
+four — at the same commit, on the same model — brought the ledger to 44/44 without
+discarding the forty that had already passed. **An all-or-nothing suite would have
+reported this as a broken system.**
+
 Agent-case assertions are **behavioural** — which tools were called, whether a
 citation or a guardrail appeared — rather than assertions about live weather
 values, so the suite stays reproducible as conditions change. Web research is
@@ -42,7 +50,7 @@ that day.
 
 ---
 
-## Deterministic cases (26) — no model, no network, no API key
+## Deterministic cases (27) — no model, no network, no API key
 
 | id | what it holds | concept |
 |---|---|---|
@@ -63,9 +71,10 @@ that day.
 | T24 | the router advises without overriding | multi-agent |
 | T25 | a licence is a **gate**, not a score | safety / Pro Finder |
 | T26 | research refuses irrelevant evidence, and no one source owns a pack | research quality |
+| T27 | synthetic values keep their label in the data and never render it raw on screen | data rule / UI honesty |
 
-Two of these are worth singling out, because they assert the opposite of what a
-system usually claims:
+Three of these are worth singling out, because they assert the opposite of what
+a system usually claims:
 
 **T25** asserts that the *highest-rated* plumber in the directory is the one the
 system refuses to recommend, because their registration is not current. Ranking an
@@ -75,6 +84,13 @@ expired licensee lower still puts them in front of you.
 already refused below a relevance threshold; research did not, and the asymmetry
 was invisible because scores were normalised before ranking — so a pack in which
 nothing was relevant scored identically to one in which everything was.
+
+**T27** asserts that every synthetic value keeps its label in the data and that no
+interface renders that label raw. It reads the splitting rules out of the shipped
+JavaScript rather than restating them, so the test cannot drift from what it
+tests, and it classifies *every* trailing qualifier rather than only the ones
+already known — the first version checked only recognised words, which made it
+circular and blind to the one failure that had actually happened.
 
 ## End-to-end agent cases (17) — live model
 
@@ -114,14 +130,19 @@ every assertion is readable there.
 
 None of these are hidden by the suite; two of them are things the suite found.
 
-- **A model can weaken its own grounding gate by drifting its search query toward
-  the vocabulary of the corpus.** Asked whether a roof may be rented for a
-  billboard — a question the documents do not cover — the *user's* phrasing scores
-  far below the grounding threshold and is correctly refused, while a
-  corpus-flavoured paraphrase the model wrote for itself once lifted an irrelevant
-  permit document above it. The answer stayed safe both times: no billboard rule
-  was invented. This is imprecision, not unsafety, and the fix is to rerank against
-  the user's original question rather than the model's search string.
+> **One limitation listed here previously has been closed, and it is worth saying
+> what it was.** A model could weaken its own grounding gate by drifting its
+> search query toward the vocabulary of the corpus: asked whether a roof may be
+> rented for a billboard — a question the documents do not answer — the user's own
+> phrasing scored **−10.96** and was correctly refused, while the corpus-flavoured
+> string the model wrote for itself scored **−0.16** and cleared the threshold.
+> The model authored the text its own gate was judged on.
+>
+> The gate now judges the **user's question**; retrieval still uses the model's
+> phrasing, because that is what makes an elided follow-up like *"what about
+> artificial turf instead?"* searchable at all. The defect and the feature were
+> the same mechanism, so they were separated by role rather than removed.
+
 - **The authority table cannot rate what it does not know.** It lists roughly forty
   domains; the open web has millions, and everything else defaults to a neutral
   weight. On queries where every result is an unrated domain, the authority term

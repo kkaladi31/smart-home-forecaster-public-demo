@@ -664,6 +664,153 @@ def _case_research_screens_and_ranks():
                           f"problems: {problems or 'none'}")
 
 
+def _case_synthetic_provenance_is_never_rendered_raw():
+    """Synthetic values keep their label in the data and never shout it on screen.
+
+    The program's data rule requires synthetic content to be labelled, so the demo
+    carries the label **inside the value** — "Maple Grove HOA (synthetic)",
+    "Carrier (illustrative)". `web/src/utils/provenance.js` splits the qualifier
+    off for display and returns it as a hover note: clean value on screen, honest
+    provenance one hover away.
+
+    Two ways that breaks, and they are not equally bad:
+
+      * the qualifier is not recognised, so the interface prints "(synthetic
+        stand-in)" as literal on-screen text — ugly, but honest;
+      * a caller takes the split value and drops the note, so an invented record
+        renders as though it were real — **this is the dishonest direction**.
+
+    The first has already happened. The regex was anchored too strictly, so
+    "(synthetic stand-in)" and "(synthetic values)" did not match while a bare
+    "(synthetic)" did — five values printed the word on screen, and the one-word
+    cases quietly worked, which made it look like the module was fine.
+
+    This case reads the regexes **out of the shipped JavaScript** rather than
+    restating them, so the test cannot drift from the thing it tests.
+    """
+    import csv
+    import json
+    import re as _re
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1]
+    src = (root / "web" / "src" / "utils" / "provenance.js").read_text(encoding="utf-8")
+    problems = []
+
+    # Pull the two live patterns out of the module under test.
+    qualifier_src = _re.search(r"const QUALIFIER = /(.+?)/\s*$", src, _re.M)
+    words_src = _re.search(r"const PROVENANCE_WORDS\s*=\s*\n?\s*/\^\((.+?)\)", src, _re.S)
+    if not qualifier_src or not words_src:
+        return False, "could not read QUALIFIER / PROVENANCE_WORDS out of provenance.js"
+
+    qualifier = _re.compile(qualifier_src.group(1))
+    words = _re.compile(rf"^({words_src.group(1)})\b", _re.I)
+
+    def split(text):
+        """The JS `splitQualifier`, driven by the JS patterns."""
+        m = qualifier.match(str(text))
+        if not m:
+            return str(text), None
+        value, qual = m.group(1), m.group(2).strip()
+        return (value.strip(), qual) if words.match(qual) else (str(text), None)
+
+    # 1. EVERY trailing "(...)" in the demo data is classified, not just the ones
+    #    already known to be provenance.
+    #
+    #    The first version of this case scanned only for qualifiers matching the
+    #    word list — which made it circular: it could confirm that recognised
+    #    words are recognised and was blind to the one failure that has actually
+    #    happened, a qualifier form nothing recognises. Injecting
+    #    "(fabricated stand-in)" into the data made it PASS.
+    #
+    #    So the logic is inverted, on the same principle as the publish
+    #    allowlist: anything the splitter does NOT treat as provenance must be a
+    #    known-genuine parenthetical, listed here. A new "(mock)" or
+    #    "(placeholder value)" in the data fails loudly instead of quietly
+    #    rendering on screen. There are only twelve distinct forms in the whole
+    #    corpus, so the list stays readable.
+    GENUINE = {
+        "deregulated", "mixed-humid", "cold", "HRV", "emergency", "HVAC/R",
+        "TDU", "REP",
+    }
+    trailing = _re.compile(r"\(([^()]+)\)\s*$")
+    fields_with_provenance = set()
+    checked = 0
+
+    def classify(value, where, field):
+        nonlocal checked
+        m = trailing.search(value)
+        if not m:
+            return
+        qualifier = m.group(1).strip()
+        _, note = split(value)
+        if note is not None:
+            checked += 1
+            fields_with_provenance.add(field)
+        elif qualifier not in GENUINE:
+            problems.append(
+                f"{where}: {value!r} ends in an unclassified '({qualifier})'. If it is "
+                "provenance, add the word to PROVENANCE_WORDS in provenance.js — it "
+                "would otherwise render on screen. If it is real content, add it to "
+                "GENUINE in this case.")
+
+    def walk(node, path=""):
+        if isinstance(node, dict):
+            for k, v in node.items():
+                walk(v, f"{path}.{k}" if path else k)
+        elif isinstance(node, list):
+            for v in node:
+                walk(v, path)
+        elif isinstance(node, str):
+            classify(node, path, path.split(".")[-1])
+
+    for path in sorted((root / "data" / "demo" / "homes").glob("*.json")):
+        walk(json.loads(path.read_text(encoding="utf-8")))
+    for name in ("contractors.csv", "utilities.csv"):
+        f = root / "data" / "demo" / name
+        if f.exists():
+            with f.open(encoding="utf-8") as fh:
+                for row in csv.DictReader(fh):
+                    for key, value in row.items():
+                        if value:
+                            classify(value, f"{name}:{key}", key)
+
+    if not checked:
+        problems.append("no provenance-bearing values found — the scan is not testing anything")
+
+    # 2. A genuine parenthetical must survive. Over-eager matching is the other
+    #    failure: it would silently delete part of a real value.
+    for keep in ["Rheem Performance Platinum (50 gal)", "Trane XR14 (2019)"]:
+        if split(keep)[1] is not None:
+            problems.append(f"a real parenthetical was stripped as provenance: {keep!r}")
+
+    # 3. Render-site allowlist. Any component that READS one of these fields must
+    #    import the splitter.
+    #
+    #    Matched as PROPERTY ACCESS (`.builder`), never as a bare word. The first
+    #    run of this case matched bare words and immediately failed on
+    #    EvidencePanel.jsx, which discusses "manufacturer" in a comment as an
+    #    authority label — nothing to do with the home profile. That is the exact
+    #    false positive the note below warns about, produced by the guard itself
+    #    within a minute of existing.
+    #
+    #    Generic leaf names are still excluded: 'gas', 'model' and 'brand' read
+    #    naturally in unrelated code, and a guard that cries wolf is a guard
+    #    somebody deletes.
+    distinctive = {f for f in fields_with_provenance
+                   if "_" in f or f in {"builder", "manufacturer"}}
+    for jsx in sorted((root / "web" / "src").rglob("*.jsx")):
+        body = jsx.read_text(encoding="utf-8")
+        named = sorted(f for f in distinctive
+                       if _re.search(rf"\.{_re.escape(f)}\b", body))
+        if named and "splitQualifier" not in body:
+            problems.append(f"{jsx.name} reads {named} without splitQualifier")
+
+    return not problems, (
+        f"{checked} provenance-bearing values across {len(fields_with_provenance)} fields; "
+        f"{len(distinctive)} guarded by the render allowlist; problems: {problems or 'none'}")
+
+
 def _case_research_refuses_and_caps_one_source():
     """Research can return NOTHING, and no single source may own the pack.
 
@@ -969,6 +1116,7 @@ TOOL_CASES = [
     {"id": "T24", "name": "Router advises without overriding", "concept": "Multi-agent coordination", "fn": _case_router_advises_without_overriding},
     {"id": "T25", "name": "Licence is a gate, not a score", "concept": "Safety / Pro Finder", "fn": _case_licence_is_a_gate_not_a_score},
     {"id": "T26", "name": "Research refuses irrelevant evidence and caps one source", "concept": "RAG / research quality", "fn": _case_research_refuses_and_caps_one_source},
+    {"id": "T27", "name": "Synthetic provenance is labelled but never rendered raw", "concept": "Data rule / UI honesty", "fn": _case_synthetic_provenance_is_never_rendered_raw},
 ]
 
 

@@ -148,11 +148,11 @@ most about.
 
 ## Evaluation
 
-**43 of 43 cases pass** on the free model this project ships with. Every case, and
+**44 of 44 cases pass** on the free model this project ships with. Every case, and
 every known limitation, is listed in **[`EVALUATION.md`](EVALUATION.md)**.
 
 ```bash
-python eval/run_eval.py --tools-only   # 26 deterministic cases, no model, ~2 min
+python eval/run_eval.py --tools-only   # 27 deterministic cases, no model, ~2 min
 python eval/run_eval.py                # adds 17 end-to-end agent cases, ~20 min
 python -m eval.ledger                  # coverage at the current commit
 ```
