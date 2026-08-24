@@ -225,7 +225,7 @@ cannot be reproduced or explained.
 
 ### Constraint by compute, latency and cost
 
-A budget object caps each run at **5 LLM calls, 45 seconds, 8 nodes**:
+A budget object caps the **search** at **4 LLM calls, 45 seconds, 8 nodes**. A full depth-2 run is therefore 5 model calls end to end — the composing call belongs to the caller, not to the search, which is why `AdvisorBudget.max_llm_calls` is 4 and not 5:
 
 ```
 1. propose    4 strategies
@@ -235,7 +235,7 @@ A budget object caps each run at **5 LLM calls, 45 seconds, 8 nodes**:
 5. compose    write up the argmax leaf
 ```
 
-Batching every critique into a single call is what holds this at 5 rather than 13.
+Batching every critique into a single call is what holds this at 5 end to end rather than 13.
 On exhaustion the search degrades to depth 1 and the result is flagged
 `budget_truncated`, surfaced in the trace rather than hidden.
 
