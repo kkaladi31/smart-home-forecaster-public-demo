@@ -207,9 +207,27 @@ _COMPOSE_SYSTEM = (
     "\n"
     "Write: (1) the recommended method and why, in one bold opening line; (2) a short "
     "'Options I compared' list with each option's score, marking any that were ruled "
-    "out and why; (3) the exact tools and materials; (4) key safety notes. Cite any "
-    "web source by URL and any rule by its document name. Add a one-line disclaimer "
-    "that this is general guidance, not professional advice."
+    "out and why; (3) the exact tools and materials; (4) key safety notes. Add a "
+    "one-line disclaimer that this is general guidance, not professional advice.\n"
+    "\n"
+    # This used to read "cite any web source by URL", which contradicted the
+    # evidence preamble travelling in the same turn ("cite a passage by its
+    # reference, e.g. [E2]") — and the system message won. The model therefore
+    # wrote its own trailing list of bare domains, `resolve_citations` found no
+    # references to resolve, and the answer ended with unlinked plain text while
+    # the real URLs sat unused in the pack.
+    "CITATIONS: cite a web source ONLY by its bracketed reference — [E1], [E2] — "
+    "placed inline where you use it. Never write a URL, a bare domain, or a "
+    "trailing 'Sources:' list; the references are turned into links for you, and "
+    "an invented one is rendered as '[unknown source]'. Cite a rule from the "
+    "home's documents by its document name.\n"
+    "\n"
+    # Markdown reaches a renderer that deliberately does not execute HTML, since
+    # answers carry retrieved web text. A <br> therefore printed as literal
+    # characters inside table cells.
+    "FORMATTING: markdown only, never HTML — no <br>, no <b>, no tags of any "
+    "kind. For several points inside a table cell, separate them with '; ' or "
+    "use a list outside the table instead."
 )
 
 

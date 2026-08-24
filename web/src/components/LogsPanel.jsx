@@ -6,24 +6,25 @@ import { fmtDuration } from '../utils/duration'
 /**
  * The Logs tab: everything the system did, on both sides of the wire.
  *
- * Frontend and backend keep separate buffers on purpose — they answer different
- * questions ("did the browser send it?" vs "what did the agent do with it?") —
- * so the source selector is the primary control, with a combined timeline for
- * when the interesting part is the handoff between them.
+ * **Source is a grouping, not a mode.** It used to be a three-way selector, which
+ * meant the two halves of a request could only be read one at a time — and the
+ * interesting part of a slow turn is usually the handoff between them. Both
+ * buffers are now always loaded and the tree opens
+ * `source → level → step → rows`, so "the browser sent it, the backend took nine
+ * seconds" is one screen instead of two.
+ *
+ * **Filtering is by dimension.** Four independent dropdowns — source, level, step,
+ * time — plus a keyword search over the message, the event name and the payload.
+ * They compose, so "backend warnings from the retrieval step in the last five
+ * minutes" is four selections rather than a scroll.
  *
  * Backend events are pulled by sequence number rather than timestamp, so tailing
  * can never skip or duplicate a row.
  */
 
-const SOURCES = [
-  { key: 'backend', label: 'Backend' },
-  { key: 'frontend', label: 'Frontend' },
-  { key: 'combined', label: 'Combined' },
-]
-
-// What each group means, shown as a tooltip on its chip. The vocabulary is the
-// point of the tab: a reader should not have to guess what "external" covers.
-const GROUP_HELP = {
+// What each step means, shown as a tooltip. The vocabulary is the point of the
+// tab: a reader should not have to guess what "external" covers.
+const STEP_HELP = {
   http: 'Inbound API requests and chat streams',
   agent: 'One agent turn, start to finish',
   router: 'Deterministic turn labelling: intent, complexity, risk (advisory only)',
@@ -50,32 +51,53 @@ const LEVEL_COLOR = {
   debug: 'var(--text-muted)',
 }
 
+// Worst first — the order someone scanning for a problem reads in.
+const LEVEL_ORDER = ['error', 'warn', 'info', 'debug']
+const SOURCE_ORDER = ['frontend', 'backend']
+const SOURCE_LABEL = { frontend: 'Frontend', backend: 'Backend' }
+
+const TIME_WINDOWS = [
+  { key: 'all', label: 'Any time', ms: null },
+  { key: '5m', label: 'Last 5 min', ms: 5 * 60_000 },
+  { key: '15m', label: 'Last 15 min', ms: 15 * 60_000 },
+  { key: '1h', label: 'Last hour', ms: 60 * 60_000 },
+  { key: 'today', label: 'Today', ms: null },
+]
+
 export default function LogsPanel() {
-  const [source, setSource] = useState('backend')
   const [backend, setBackend] = useState([])
   const [frontend, setFrontend] = useState(() => logbus.snapshot())
-  const [group, setGroup] = useState(null)
-  const [query, setQuery] = useState('')
+
+  const [sourceFilter, setSourceFilter] = useState('all')
+  const [levelFilter, setLevelFilter] = useState('all')
+  const [stepFilter, setStepFilter] = useState('all')
+  const [timeFilter, setTimeFilter] = useState('all')
   const [showDebug, setShowDebug] = useState(false)
+  const [query, setQuery] = useState('')
+
+  const [view, setView] = useState('grouped')
+  // Groups open unless closed; leaf steps closed unless opened. The two levels
+  // have opposite defaults, so they need separate sets — folding both into one
+  // "collapsed" set made expand-all ambiguous.
+  const [closed, setClosed] = useState(() => new Set())
+  const [opened, setOpened] = useState(() => new Set())
+
   const [tailing, setTailing] = useState(true)
   const [meta, setMeta] = useState({ dropped: 0, capacity: 0 })
   const [error, setError] = useState('')
   const sinceRef = useRef(0)
   const bottomRef = useRef(null)
 
-  // --- frontend: push-based, already in memory --------------------------
   useEffect(() => logbus.subscribe(() => setFrontend(logbus.snapshot())), [])
 
-  // --- backend: poll by sequence number ---------------------------------
   const poll = useCallback(async () => {
     try {
       const data = await getBackendLogs({ since: sinceRef.current, limit: 1000 })
       setMeta({ dropped: data.dropped, capacity: data.capacity })
       setError('')
-
-      // A latest_seq behind our cursor means the server restarted and its
-      // counter began again at 1. Waiting for a sequence number that will never
-      // arrive would freeze the tail, so start the cursor over.
+      // A latest_seq behind our cursor means the server restarted and its counter
+      // began again at 1. Waiting for a sequence that will never arrive would
+      // freeze the tail, so start the cursor over.
       if (data.latest_seq < sinceRef.current) {
         sinceRef.current = 0
         setBackend(data.events)
@@ -97,70 +119,121 @@ export default function LogsPanel() {
     return () => clearInterval(id)
   }, [poll, tailing])
 
-  const rows = useMemo(() => {
-    let list =
-      source === 'backend' ? backend
-        : source === 'frontend' ? frontend
-          : [...backend, ...frontend].sort((a, b) => (a.ts < b.ts ? -1 : a.ts > b.ts ? 1 : 0))
+  // Both buffers, always. Source is a filter and a grouping, never a fetch mode.
+  const all = useMemo(
+    () => [...backend, ...frontend].sort((a, b) => (a.ts < b.ts ? -1 : a.ts > b.ts ? 1 : 0)),
+    [backend, frontend],
+  )
 
-    if (group) list = list.filter((e) => e.group === group)
-    if (!showDebug) list = list.filter((e) => e.level !== 'debug')
-    if (query.trim()) {
-      const q = query.toLowerCase()
-      list = list.filter(
-        (e) => e.message.toLowerCase().includes(q)
-          || e.event.toLowerCase().includes(q)
-          || JSON.stringify(e.data ?? '').toLowerCase().includes(q),
-      )
+  const cutoff = useMemo(() => {
+    const w = TIME_WINDOWS.find((t) => t.key === timeFilter)
+    if (!w || timeFilter === 'all') return null
+    if (timeFilter === 'today') {
+      const d = new Date()
+      d.setHours(0, 0, 0, 0)
+      return d.getTime()
     }
-    return list
-  }, [source, backend, frontend, group, query, showDebug])
+    return Date.now() - w.ms
+  }, [timeFilter])
 
-  // Group counts are computed before the group filter, so the chips keep showing
-  // what else is available instead of collapsing to the current selection.
-  const counts = useMemo(() => {
-    const base =
-      source === 'backend' ? backend : source === 'frontend' ? frontend : [...backend, ...frontend]
-    const visible = showDebug ? base : base.filter((e) => e.level !== 'debug')
-    const out = {}
-    for (const e of visible) out[e.group] = (out[e.group] ?? 0) + 1
-    return out
-  }, [source, backend, frontend, showDebug])
+  // ONE derivation. The count shown to the user and the list rendered below it
+  // come from this same array, so they cannot disagree about what is on screen.
+  const rows = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    return all.filter((e) => {
+      if (!showDebug && e.level === 'debug') return false
+      if (sourceFilter !== 'all' && e.source !== sourceFilter) return false
+      if (levelFilter !== 'all' && e.level !== levelFilter) return false
+      if (stepFilter !== 'all' && e.group !== stepFilter) return false
+      if (cutoff != null && new Date(e.ts).getTime() < cutoff) return false
+      if (q) {
+        const hay = `${e.message} ${e.event} ${JSON.stringify(e.data ?? '')}`.toLowerCase()
+        if (!hay.includes(q)) return false
+      }
+      return true
+    })
+  }, [all, showDebug, sourceFilter, levelFilter, stepFilter, cutoff, query])
 
-  // Where the time actually goes: the slowest measured operations on screen.
+  // Steps offered in the dropdown, with counts, from everything the other
+  // filters admit — so the list narrows with context instead of going stale.
+  const steps = useMemo(() => {
+    const out = new Map()
+    for (const e of all) {
+      if (!showDebug && e.level === 'debug') continue
+      if (sourceFilter !== 'all' && e.source !== sourceFilter) continue
+      out.set(e.group, (out.get(e.group) ?? 0) + 1)
+    }
+    return [...out.entries()].sort((a, b) => b[1] - a[1])
+  }, [all, showDebug, sourceFilter])
+
+  // source -> level -> step -> rows, first-seen order preserved at every level so
+  // the folded view still reads chronologically rather than alphabetically.
+  const tree = useMemo(() => {
+    const bySource = new Map()
+    for (const e of rows) {
+      if (!bySource.has(e.source)) bySource.set(e.source, new Map())
+      const byLevel = bySource.get(e.source)
+      if (!byLevel.has(e.level)) byLevel.set(e.level, new Map())
+      const byStep = byLevel.get(e.level)
+      if (!byStep.has(e.group)) byStep.set(e.group, [])
+      byStep.get(e.group).push(e)
+    }
+    // Stable ordering: known sources first, then levels worst-first.
+    return [...bySource.entries()]
+      .sort((a, b) => SOURCE_ORDER.indexOf(a[0]) - SOURCE_ORDER.indexOf(b[0]))
+      .map(([src, byLevel]) => [
+        src,
+        [...byLevel.entries()].sort(
+          (a, b) => LEVEL_ORDER.indexOf(a[0]) - LEVEL_ORDER.indexOf(b[0]),
+        ),
+      ])
+  }, [rows])
+
   const slowest = useMemo(
     () => rows.filter((e) => e.duration_ms != null)
-      .sort((a, b) => b.duration_ms - a.duration_ms)
-      .slice(0, 5),
+      .sort((a, b) => b.duration_ms - a.duration_ms).slice(0, 5),
     [rows],
   )
 
   useEffect(() => {
-    if (tailing) bottomRef.current?.scrollIntoView({ block: 'nearest' })
-  }, [rows, tailing])
+    if (tailing && view === 'timeline') bottomRef.current?.scrollIntoView({ block: 'nearest' })
+  }, [rows, tailing, view])
+
+  const dirty = sourceFilter !== 'all' || levelFilter !== 'all' || stepFilter !== 'all'
+    || timeFilter !== 'all' || query.trim() !== '' || showDebug
+
+  function resetFilters() {
+    setSourceFilter('all'); setLevelFilter('all'); setStepFilter('all')
+    setTimeFilter('all'); setQuery(''); setShowDebug(false)
+  }
+
+  const keys = useMemo(() => {
+    const groupKeys = []
+    const leafKeys = []
+    for (const [src, levels] of tree) {
+      groupKeys.push(`s:${src}`)
+      for (const [lvl, byStep] of levels) {
+        groupKeys.push(`l:${src}/${lvl}`)
+        for (const step of byStep.keys()) leafKeys.push(`${src}/${lvl}/${step}`)
+      }
+    }
+    return { groupKeys, leafKeys }
+  }, [tree])
 
   async function handleClear() {
-    if (source !== 'frontend') {
-      try {
-        await clearBackendLogs()
-      } catch { /* surfaced by the next poll */ }
-      sinceRef.current = 0
-      setBackend([])
-    }
-    if (source !== 'backend') {
-      logbus.clear()
-      setFrontend(logbus.snapshot())
-    }
+    try { await clearBackendLogs() } catch { /* surfaced by the next poll */ }
+    sinceRef.current = 0
+    setBackend([])
+    logbus.clear()
+    setFrontend(logbus.snapshot())
   }
 
   function handleExport() {
-    // Whatever is on screen, in the shape it is stored — so an exported run can
-    // be attached to a bug report or the capstone write-up as-is.
     const blob = new Blob([JSON.stringify(rows, null, 2)], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `forecaster-logs-${source}-${new Date().toISOString().slice(0, 19).replace(/:/g, '')}.json`
+    a.download = `forecaster-logs-${new Date().toISOString().slice(0, 19).replace(/:/g, '')}.json`
     a.click()
     URL.revokeObjectURL(url)
     logbus.log('ui', 'logs.exported', `Exported ${rows.length} events`)
@@ -170,77 +243,90 @@ export default function LogsPanel() {
 
   return (
     <div className="card flex flex-col min-h-0" style={{ height: 'calc(100vh - 9rem)' }}>
-      {/* Controls */}
-      <div className="px-4 py-3 space-y-3" style={{ borderBottom: '1px solid var(--border)' }}>
-        <div className="flex items-center gap-3 flex-wrap">
-          <div className="flex rounded-lg overflow-hidden" style={{ border: '1px solid var(--border)' }}>
-            {SOURCES.map((s) => (
-              <button
-                key={s.key}
-                onClick={() => { setSource(s.key); setGroup(null) }}
-                className="px-3 py-1.5 text-xs font-medium"
-                style={{
-                  background: source === s.key ? 'var(--series-1)' : 'transparent',
-                  color: source === s.key ? '#fff' : 'var(--text-secondary)',
-                }}
-              >
-                {s.label}
-              </button>
-            ))}
-          </div>
-
+      <div className="px-4 py-3 space-y-2.5" style={{ borderBottom: '1px solid var(--border)' }}>
+        {/* Search + view + actions */}
+        <div className="flex items-center gap-2 flex-wrap">
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Filter events…"
-            className="px-3 py-1.5 rounded-lg text-xs outline-none flex-1 min-w-[140px]"
+            placeholder="Search message, event name or payload…"
+            className="px-3 py-1.5 rounded-md text-xs outline-none flex-1 min-w-[180px]"
             style={{
               background: 'var(--surface-page)', border: '1px solid var(--border)',
               color: 'var(--text-primary)',
             }}
           />
-
-          <label className="flex items-center gap-1.5 text-xs muted cursor-pointer">
-            <input type="checkbox" checked={showDebug}
-              onChange={(e) => setShowDebug(e.target.checked)} />
-            Debug
-          </label>
+          <Segmented
+            options={[{ key: 'grouped', label: 'Grouped' }, { key: 'timeline', label: 'Timeline' }]}
+            value={view}
+            onChange={setView}
+          />
           <label className="flex items-center gap-1.5 text-xs muted cursor-pointer"
             title="Poll the backend every second and stick to the newest row">
             <input type="checkbox" checked={tailing}
               onChange={(e) => setTailing(e.target.checked)} />
             Live
           </label>
-
-          <button onClick={handleExport} className="text-xs px-2 py-1.5 rounded-lg"
-            style={{ border: '1px solid var(--border)' }}>
-            Export
-          </button>
-          <button onClick={handleClear} className="text-xs px-2 py-1.5 rounded-lg"
-            style={{ border: '1px solid var(--border)', color: 'var(--status-critical)' }}>
-            Clear
-          </button>
+          <Btn onClick={handleExport}>Export</Btn>
+          <Btn onClick={handleClear} danger>Clear</Btn>
         </div>
 
-        {/* Subgroups */}
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <Chip label="All" count={rows.length} active={!group} onClick={() => setGroup(null)} />
-          {Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([g, n]) => (
-            <Chip
-              key={g}
-              label={g}
-              count={n}
-              title={GROUP_HELP[g]}
-              active={group === g}
-              onClick={() => setGroup(group === g ? null : g)}
-            />
-          ))}
+        {/* Filter dimensions — independent, and they compose */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <Select label="Source" value={sourceFilter} onChange={setSourceFilter}
+            options={[
+              { key: 'all', label: `All sources (${all.length})` },
+              ...SOURCE_ORDER.map((s) => ({
+                key: s,
+                label: `${SOURCE_LABEL[s]} (${all.filter((e) => e.source === s).length})`,
+              })),
+            ]} />
+
+          <Select label="Level" value={levelFilter} onChange={setLevelFilter}
+            options={[
+              { key: 'all', label: 'All levels' },
+              ...LEVEL_ORDER.map((l) => ({
+                key: l,
+                label: `${l} (${rowsAtLevel(all, l, showDebug, sourceFilter)})`,
+              })),
+            ]} />
+
+          <Select label="Step" value={stepFilter} onChange={setStepFilter}
+            title={STEP_HELP[stepFilter]}
+            options={[
+              { key: 'all', label: 'All steps' },
+              ...steps.map(([g, n]) => ({ key: g, label: `${g} (${n})` })),
+            ]} />
+
+          <Select label="Time" value={timeFilter} onChange={setTimeFilter}
+            options={TIME_WINDOWS.map((t) => ({ key: t.key, label: t.label }))} />
+
+          <label className="flex items-center gap-1.5 text-xs muted cursor-pointer"
+            title="Debug is the only level that is routinely noise, so it is opt-in">
+            <input type="checkbox" checked={showDebug}
+              onChange={(e) => setShowDebug(e.target.checked)} />
+            Debug
+          </label>
+
+          {dirty && <Btn onClick={resetFilters} dashed>Reset filters</Btn>}
         </div>
 
         <div className="flex items-center gap-3 text-[11px] muted flex-wrap">
-          <span>{rows.length} shown</span>
+          <span><b>{rows.length}</b> shown of {all.length}</span>
           {errors > 0 && (
             <span style={{ color: 'var(--status-critical)' }}>{errors} error{errors === 1 ? '' : 's'}</span>
+          )}
+          {view === 'grouped' && (
+            <>
+              <button className="underline"
+                onClick={() => { setClosed(new Set()); setOpened(new Set(keys.leafKeys)) }}>
+                expand all
+              </button>
+              <button className="underline"
+                onClick={() => { setClosed(new Set(keys.groupKeys)); setOpened(new Set()) }}>
+                collapse all
+              </button>
+            </>
           )}
           {meta.dropped > 0 && <span>{meta.dropped} older backend events dropped (buffer holds {meta.capacity})</span>}
           {error && <span style={{ color: 'var(--status-critical)' }}>Log fetch failed: {error}</span>}
@@ -252,15 +338,57 @@ export default function LogsPanel() {
         </div>
       </div>
 
-      {/* Rows */}
       <div className="flex-1 min-h-0 overflow-y-auto scroll-thin">
         {rows.length === 0 ? (
           <p className="text-xs muted p-4">
-            No events match. Ask the agent something, then come back — a single answer
-            produces a few dozen.
+            {all.length === 0
+              ? 'No events yet. Ask the agent something, then come back — a single answer produces a few dozen.'
+              : 'No events match these filters. Widen a dimension, or reset them.'}
           </p>
+        ) : view === 'timeline' ? (
+          rows.map((e) => <Row key={`${e.source}-${e.seq}`} event={e} showSource showStep />)
         ) : (
-          rows.map((e) => <Row key={`${e.source}-${e.seq}`} event={e} showSource={source === 'combined'} />)
+          tree.map(([src, levels]) => (
+            <Section
+              key={src}
+              title={SOURCE_LABEL[src] ?? src}
+              count={levels.reduce((n, [, byStep]) => n + [...byStep.values()].flat().length, 0)}
+              tone="var(--text-primary)"
+              open={!closed.has(`s:${src}`)}
+              onToggle={() => setClosed((s) => toggleIn(s, `s:${src}`))}
+              depth={0}
+            >
+              {levels.map(([lvl, byStep]) => (
+                <Section
+                  key={lvl}
+                  title={lvl}
+                  count={[...byStep.values()].flat().length}
+                  tone={LEVEL_COLOR[lvl]}
+                  open={!closed.has(`l:${src}/${lvl}`)}
+                  onToggle={() => setClosed((s) => toggleIn(s, `l:${src}/${lvl}`))}
+                  depth={1}
+                >
+                  {[...byStep.entries()].map(([step, events]) => (
+                    <Section
+                      key={step}
+                      title={step}
+                      help={STEP_HELP[step]}
+                      count={events.length}
+                      ms={totalMs(events)}
+                      tone="var(--text-secondary)"
+                      open={opened.has(`${src}/${lvl}/${step}`)}
+                      onToggle={() => setOpened((s) => toggleIn(s, `${src}/${lvl}/${step}`))}
+                      depth={2}
+                    >
+                      {events.map((e) => (
+                        <Row key={`${e.source}-${e.seq}`} event={e} indent />
+                      ))}
+                    </Section>
+                  ))}
+                </Section>
+              ))}
+            </Section>
+          ))
         )}
         <div ref={bottomRef} />
       </div>
@@ -268,36 +396,117 @@ export default function LogsPanel() {
   )
 }
 
-function Chip({ label, count, active, onClick, title }) {
+function rowsAtLevel(all, level, showDebug, sourceFilter) {
+  return all.filter((e) => e.level === level
+    && (showDebug || e.level !== 'debug')
+    && (sourceFilter === 'all' || e.source === sourceFilter)).length
+}
+
+function toggleIn(set, value) {
+  const next = new Set(set)
+  if (next.has(value)) next.delete(value)
+  else next.add(value)
+  return next
+}
+
+function totalMs(events) {
+  const timed = events.filter((e) => e.duration_ms != null)
+  return timed.length ? timed.reduce((s, e) => s + e.duration_ms, 0) : null
+}
+
+function Section({ title, help, count, ms, tone, open, onToggle, depth, children }) {
+  const pad = ['pl-4', 'pl-8', 'pl-12'][depth] ?? 'pl-4'
+  return (
+    <div style={depth === 0 ? { borderBottom: '1px solid var(--border)' } : undefined}>
+      <button
+        onClick={onToggle}
+        title={help}
+        className={`w-full text-left ${pad} pr-4 py-1.5 text-xs flex items-baseline gap-2`}
+        style={depth === 0 ? { background: 'var(--surface-page)' } : undefined}
+      >
+        <span className="muted shrink-0">{open ? '▾' : '▸'}</span>
+        <span className={depth === 0 ? 'font-semibold' : depth === 1 ? 'font-medium' : ''}
+          style={{ color: tone }}>
+          {title}
+        </span>
+        <span className="muted tabular">{count}</span>
+        <span className="flex-1" />
+        {ms != null && <span className="muted tabular">{fmtDuration(ms)}</span>}
+      </button>
+      {open && children}
+    </div>
+  )
+}
+
+function Segmented({ options, value, onChange }) {
+  return (
+    <div className="flex rounded-md overflow-hidden" style={{ border: '1px solid var(--border)' }}>
+      {options.map((o) => (
+        <button
+          key={o.key}
+          onClick={() => onChange(o.key)}
+          className="px-3 py-1.5 text-xs font-medium"
+          style={{
+            background: value === o.key ? 'var(--series-1)' : 'transparent',
+            color: value === o.key ? '#fff' : 'var(--text-secondary)',
+          }}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+function Select({ label, value, onChange, options, title }) {
+  return (
+    <label className="flex items-center gap-1.5 text-[11px] muted" title={title}>
+      {label}
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="px-2 py-1 rounded-md text-xs outline-none"
+        style={{
+          background: 'var(--surface-page)', border: '1px solid var(--border)',
+          color: 'var(--text-primary)',
+        }}
+      >
+        {options.map((o) => (
+          <option key={o.key} value={o.key}>{o.label}</option>
+        ))}
+      </select>
+    </label>
+  )
+}
+
+function Btn({ children, onClick, danger, dashed }) {
   return (
     <button
       onClick={onClick}
-      title={title}
-      className="text-[11px] px-2 py-0.5 rounded-full tabular"
+      className="text-xs px-2.5 py-1.5 rounded-md"
       style={{
-        border: '1px solid var(--border)',
-        background: active ? 'var(--series-1)' : 'var(--surface-page)',
-        color: active ? '#fff' : 'var(--text-secondary)',
+        border: `1px ${dashed ? 'dashed' : 'solid'} var(--border)`,
+        color: danger ? 'var(--status-critical)' : 'var(--text-secondary)',
       }}
     >
-      {label} {count}
+      {children}
     </button>
   )
 }
 
-function Row({ event, showSource }) {
+function Row({ event, showSource, showStep, indent }) {
   const [open, setOpen] = useState(false)
   const hasData = event.data && Object.keys(event.data).length > 0
 
   return (
     <div
-      className="px-4 py-1.5 text-xs"
+      className={`${indent ? 'pl-16 pr-4' : 'px-4'} py-1.5 text-xs`}
       style={{ borderBottom: '1px solid var(--border)' }}
     >
       <div className="flex items-baseline gap-2">
         <span className="muted tabular shrink-0" title={event.ts}>{clock(event.ts)}</span>
         {showSource && (
-          <span className="shrink-0 text-[10px] px-1 rounded"
+          <span className="shrink-0 text-[10px] px-1 rounded-md"
             style={{
               border: '1px solid var(--border)',
               color: event.source === 'frontend' ? 'var(--series-2)' : 'var(--series-1)',
@@ -305,9 +514,11 @@ function Row({ event, showSource }) {
             {event.source === 'frontend' ? 'FE' : 'BE'}
           </span>
         )}
-        <span className="shrink-0 tabular" style={{ color: LEVEL_COLOR[event.level] }}>
-          {event.group}
-        </span>
+        {showStep && (
+          <span className="shrink-0 tabular" style={{ color: LEVEL_COLOR[event.level] }}>
+            {event.group}
+          </span>
+        )}
         <button
           onClick={() => hasData && setOpen((o) => !o)}
           className={`text-left flex-1 min-w-0 ${hasData ? 'hover:underline' : 'cursor-default'}`}
@@ -324,7 +535,7 @@ function Row({ event, showSource }) {
         )}
       </div>
       {open && hasData && (
-        <pre className="mt-1 ml-4 p-2 rounded overflow-x-auto scroll-thin text-[11px]"
+        <pre className="mt-1 ml-4 p-2 rounded-md overflow-x-auto scroll-thin text-[11px]"
           style={{ background: 'var(--surface-page)', border: '1px solid var(--border)' }}>
           {JSON.stringify(event.data, null, 2)}
         </pre>
