@@ -162,6 +162,26 @@ def _linkify_source_list(text: str) -> str:
     return "\n".join(out)
 
 
+# A "source" that is really the model describing itself. Observed live: asked how
+# it decides to bypass, the agent listed its own routing rules and closed with
+# "Sources: System prompt" — then, challenged, denied having done it.
+#
+# The disclosure itself was harmless (these instructions are published, and hold
+# no secrets) but the CITATION was not: sources in this system mean retrieved
+# documents and tool results, and a line that cites the prompt dresses
+# self-description up as evidence. The prompt now tells the model to describe its
+# design in prose and cite nothing; this removes the line if it does it anyway.
+_SELF_CITATION = re.compile(
+    r"^\s*[-*]\s+(the\s+)?(system\s+prompt|my\s+(system\s+)?(prompt|instructions|training|"
+    r"guidelines)|internal\s+(instructions|guidelines)|operational\s+guidelines)"
+    r"\s*\.?\s*$", re.I)
+
+
+def _drop_self_citations(text: str) -> str:
+    """Remove source bullets that cite the model's own instructions."""
+    return "\n".join(l for l in text.splitlines() if not _SELF_CITATION.match(l))
+
+
 def clean_answer(text: str) -> str:
     """Strip citation artefacts and make a source list clickable."""
     if not text:
@@ -169,6 +189,7 @@ def clean_answer(text: str) -> str:
     cleaned = _CITATION_ARTEFACT.sub("", text)
     cleaned = re.sub(r" +([.,;:!?])", r"\1", cleaned)
     cleaned = re.sub(r"[ \t]{2,}", " ", cleaned)
+    cleaned = _drop_self_citations(cleaned)
     return _linkify_source_list(cleaned)
 
 
