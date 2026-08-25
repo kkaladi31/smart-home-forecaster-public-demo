@@ -23,6 +23,7 @@ would risk discarding a real answer, which is the one mistake this must not make
 """
 from __future__ import annotations
 
+import re
 from collections import Counter
 
 # Below this length, nothing is judged. Short replies are legitimately
@@ -103,6 +104,135 @@ USER_MESSAGE = (
     "known limitation of the free model under load rather than a problem with "
     "your question — please try again."
 )
+
+
+# Citation artefacts some models emit around tool results — 【ask_advisor†sources】,
+# 【4:0†file】, and sometimes an entire URL wrapped in the same brackets. They are the
+# model narrating its own retrieval, not a reference anyone can follow, and they
+# render as noise in the middle of a sentence.
+#
+# Stripped deterministically rather than prompted away: this is a token-level habit
+# of the model, and a prompt line asking it to stop is exactly the kind of
+# instruction a free-tier model drops under a long context. Real citations in this
+# system are markdown links, so nothing legitimate uses these brackets.
+#
+# Unbounded inside the brackets on purpose. The first version capped the contents
+# at 120 characters and promptly missed a wrapped URL carrying a 90-character
+# tracking parameter — the exact case it was written for.
+_CITATION_ARTEFACT = re.compile(r"【[^】]*】")
+
+# A URL that is not already the target of a markdown link.
+_BARE_URL = re.compile(r"(?<![(\[])\bhttps?://[^\s<>()\[\]]+")
+
+# One item of a bulleted source list.
+_SOURCE_ITEM = re.compile(r"^(?P<bullet>\s*[-*]\s+)(?P<body>.*\S)\s*$")
+
+
+def _domain_of(url: str) -> str:
+    host = re.sub(r"^https?://", "", url).split("/")[0]
+    return host[4:] if host.startswith("www.") else host
+
+
+def _linkify_source_list(text: str) -> str:
+    """Rewrite `- label - https://x` as `- [label](https://x)`.
+
+    The prompt asks for markdown links and usually gets them; when it does not,
+    the answer ends in a column of unclickable URLs. Doing it in code is safe in a
+    way that asking the model again is not — a bare URL becoming a link to itself
+    cannot be wrong, and the alternative is a references section nobody can
+    follow. Lines that already contain a markdown link are left untouched, and so
+    is any bullet without a URL, which is how document citations survive.
+    """
+    out = []
+    for line in text.splitlines():
+        match = _SOURCE_ITEM.match(line)
+        if not match or "](http" in line:
+            out.append(line)
+            continue
+        body = match.group("body")
+        found = _BARE_URL.search(body)
+        if not found:
+            out.append(line)
+            continue
+        url = found.group(0).rstrip(".,;:")
+        label = body[:found.start()].strip().rstrip("-–—:").strip()
+        tail = body[found.start() + len(found.group(0)):].strip()
+        label = label or _domain_of(url)
+        out.append(f"{match.group('bullet')}[{label}]({url})" + (f" {tail}" if tail else ""))
+    return "\n".join(out)
+
+
+def clean_answer(text: str) -> str:
+    """Strip citation artefacts and make a source list clickable."""
+    if not text:
+        return text
+    cleaned = _CITATION_ARTEFACT.sub("", text)
+    cleaned = re.sub(r" +([.,;:!?])", r"\1", cleaned)
+    cleaned = re.sub(r"[ \t]{2,}", " ", cleaned)
+    return _linkify_source_list(cleaned)
+
+
+_URL_IN_TEXT = re.compile(r"https?://[^\s\"'<>)\]]+")
+_MD_LINK = re.compile(r"\[([^\]]+)\]\((https?://[^)\s]+)\)")
+
+
+def _canonical(url: str) -> str:
+    """A URL's identity for comparison: no scheme, no `www.`, no trailing slash.
+
+    Deliberately loose on those three and strict on everything else. A model that
+    copies a URL correctly but writes `http` for `https` should still match; a
+    model that invents a plausible-looking path should not.
+    """
+    u = url.strip().rstrip(".,;:)\"'")
+    u = re.sub(r"^https?://", "", u)
+    if u.startswith("www."):
+        u = u[4:]
+    return u.rstrip("/").lower()
+
+
+def collect_source_urls(trace: list | None) -> set[str]:
+    """Every URL that a tool actually returned during this turn.
+
+    The trace holds each tool result verbatim, so this is the authoritative set:
+    if a URL is not in here, no tool produced it and the model composed it.
+    """
+    urls: set[str] = set()
+    for step in trace or []:
+        if step.get("kind") != "result":
+            continue
+        for found in _URL_IN_TEXT.findall(str(step.get("content", ""))):
+            urls.add(_canonical(found))
+    return urls
+
+
+def enforce_links(text: str, allowed: set[str]) -> tuple[str, list[str]]:
+    """Demote any link the tools did not actually return to plain text.
+
+    Citations in this system are supposed to be evidence, not decoration, and a
+    link is the one part of an answer a reader will act on without checking. A
+    model that half-remembers a URL produces something that looks authoritative
+    and lands on a 404 — or worse, on a real page that says something else.
+
+    So the rule is not "warn about" but "remove": an unverifiable link loses its
+    href and keeps its words. The reader still sees what was claimed, and cannot
+    be sent somewhere the system never looked.
+
+    Returns the cleaned text and the list of URLs that were demoted, so the
+    caller can record it rather than fixing the symptom silently.
+    """
+    if not text:
+        return text, []
+    demoted: list[str] = []
+
+    def check(match: re.Match) -> str:
+        label, url = match.group(1), match.group(2)
+        if not allowed or _canonical(url) in allowed:
+            return match.group(0)
+        demoted.append(url)
+        return label
+
+    cleaned = _MD_LINK.sub(check, text)
+    return cleaned, demoted
 
 
 if __name__ == "__main__":

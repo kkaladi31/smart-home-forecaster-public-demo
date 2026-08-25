@@ -140,6 +140,10 @@ Formatting rules:
   costs, dates). A table needs at least two rows and cells of a few words each. Never use a
   table for steps, for a checklist, or for one item's details.
 - NEVER add a "source" column that repeats the same document on every row.
+- MARKDOWN ONLY, NEVER HTML. No <br>, no <b>, no tags of any kind - the renderer does not
+  execute HTML, so a tag reaches the reader as literal characters. A table cell cannot hold
+  a line break: keep cells to a few words, separate several points with "; ", or move the
+  detail out of the table into a list underneath it.
 - Use ordinary hyphens (-) in compound words. NEVER use non-breaking or figure hyphens
   (U+2011, U+2012) — they render as stray marks. Em dashes and normal quotes are fine.
 - Aim for under 200 words for a simple question. A checklist may run longer; nothing else
@@ -148,9 +152,20 @@ Formatting rules:
 Citing sources:
 - ALWAYS cite. Weather answers name the data source inline (e.g. "per NWS"). Policy answers
   must be traceable to the passages you used.
-- Put citations in ONE `**Sources:**` line at the very end, each distinct source listed once,
-  separated by semicolons. Do not repeat a citation inside the body, and do not restate the
-  full document title more than once.
+- Put citations in ONE `**Sources:**` section at the very end, each distinct source listed
+  once, as a MARKDOWN LIST - one `- ` bullet per source, never a semicolon run. Do not
+  repeat a citation inside the body, and do not restate a full document title more than once.
+- A WEB source must be written as a markdown link: `- [domain.com](https://the-real-url)`.
+  Take the URL from the tool result: `ask_advisor` returns `evidence.passages`, each with a
+  `domain` and a `url`, and its `recommendation` text already contains resolved links you
+  can reuse verbatim. Copy a URL character for character. NEVER write a bare domain, a bare
+  page title, or a URL you composed yourself. If you have no URL for something, it is not a
+  web source - cite it as a document by name instead.
+- NEVER write citation markers of your own, in any bracket style. No footnote tokens, no
+  file references, nothing of the form 【...】. The ONLY citation forms are a markdown link
+  and a document name.
+- A DOCUMENT from the home's own files is cited by its name, with no link and no invented
+  publisher.
 - End with a one-line safety note: this is general guidance, not professional advice, and
   gas/electrical/burst-pipe emergencies need a licensed professional or the utility.
 - Do NOT take real-world actions (sending messages, scheduling) without explicit user
@@ -169,8 +184,9 @@ Example of the shape a good answer has:
 - Smoke alarm in every bedroom, CO alarm on each floor, one fire extinguisher.
 - Check your insurance: most homeowners policies exclude short-term rental activity.
 
-**Sources:** Short-Term Rental Policy and Checklist (HOA restrictions; city STR ordinance;
-insurance considerations).
+**Sources:**
+- Short-Term Rental Policy and Checklist (HOA restrictions, city STR ordinance, insurance)
+- [minneapolis.gov](https://www.minneapolis.gov/example-str-permit)
 
 This is general guidance, not professional advice - confirm current rules with your HOA
 board and the city permitting office."""
@@ -907,7 +923,7 @@ def stream_answer(
                         event.update(_structured_extras(msg.name, content))
                         yield event
                     elif isinstance(msg, AIMessage) and msg.content:
-                        answer = msg.content
+                        answer = output_guard.clean_answer(msg.content)
         for event in tracer.drain():
             yield event
     except Exception as exc:
@@ -928,6 +944,19 @@ def stream_answer(
                           "means the request timed out or hit a provider limit — try again."}
         yield {"type": "done", "blocked": False, "elapsed_ms": elapsed_ms()}
         return
+
+    # Every link in the answer must be one a TOOL actually returned. A model that
+    # half-remembers a URL produces something that looks authoritative and lands
+    # on a 404 — or worse, on a real page that says something else. The trace
+    # holds each tool result verbatim, so it is the authoritative set; anything
+    # outside it was composed by the model and loses its href, keeping its words.
+    answer, _demoted = output_guard.enforce_links(
+        answer, output_guard.collect_source_urls(trace))
+    if _demoted:
+        telemetry.record(
+            "safety", "safety.unverifiable_link",
+            f"Removed {len(_demoted)} link(s) no tool returned",
+            level="warn", thread_id=thread_id, data={"urls": _demoted[:5]})
 
     # Always send the finished text even though it was streamed token-by-token:
     # this is the authoritative copy (the deltas are display-only), and it lets
@@ -1018,9 +1047,24 @@ def answer_with_trace(
     )
     messages = result["messages"]
     final = messages[-1]
-    answer = final.content if isinstance(final, AIMessage) else str(final)
+    answer = output_guard.clean_answer(
+        final.content if isinstance(final, AIMessage) else str(final))
 
     trace = _extract_trace(messages)
+
+    # Must come AFTER the trace exists — it is the set of URLs the tools actually
+    # returned. Placed above it on the first attempt, which raised
+    # "cannot access local variable 'trace'" on every agent case: the streaming
+    # path builds its trace incrementally and was fine, this one assembles it at
+    # the end. Two paths, two lifetimes, one shared helper.
+    answer, _demoted = output_guard.enforce_links(
+        answer, output_guard.collect_source_urls(trace))
+    if _demoted:
+        telemetry.record(
+            "safety", "safety.unverifiable_link",
+            f"Removed {len(_demoted)} link(s) no tool returned",
+            level="warn", thread_id=thread_id, data={"urls": _demoted[:5]})
+
     if prep["memory_context"]:
         trace.insert(0, {"kind": "result", "name": "episodic_memory",
                          "content": f"recalled {len(recalled)} past interaction(s): "

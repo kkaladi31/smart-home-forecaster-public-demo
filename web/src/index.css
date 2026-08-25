@@ -16,6 +16,8 @@
   --baseline: #c3c2b7;
   --border: rgba(11, 11, 11, 0.10);
 
+  --link: #1a5fb4;           /* citations: the usual link blue, readable on white */
+  --link-visited: #6c3fa8;
   --series-1: #2a78d6;       /* actual temperature */
   --series-2: #eb6834;       /* feels like */
 
@@ -36,6 +38,8 @@
     --gridline: #2c2c2a;
     --baseline: #383835;
     --border: rgba(255, 255, 255, 0.10);
+    --link: #7cb2f5;         /* lifted for contrast on the dark surface */
+    --link-visited: #c4a2f0;
     --series-1: #3987e5;
     --series-2: #d95926;
   }
@@ -51,6 +55,8 @@
   --gridline: #2c2c2a;
   --baseline: #383835;
   --border: rgba(255, 255, 255, 0.10);
+  --link: #7cb2f5;
+  --link-visited: #c4a2f0;
   --series-1: #3987e5;
   --series-2: #d95926;
 }
@@ -114,6 +120,20 @@ body {
 .md h2 { font-size: 1rem; }
 .md h3, .md h4 { font-size: 0.9rem; }
 .md h1:first-child, .md h2:first-child, .md h3:first-child { margin-top: 0; }
+
+/* Links must look like links. There was no rule here at all, so a citation
+   inherited body colour and read as ordinary text — which defeats the point of
+   resolving citations into links in the first place: a reader could not tell
+   what was clickable. Blue and underlined, the convention everyone already
+   knows, with the underline offset so descenders stay legible. */
+.md a {
+  color: var(--link);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+}
+.md a:hover { text-decoration-thickness: 2px; }
+.md a:visited { color: var(--link-visited); }
 
 .md ul, .md ol { margin: 0 0 0.6rem; padding-left: 1.15rem; }
 .md ul { list-style: disc; }
